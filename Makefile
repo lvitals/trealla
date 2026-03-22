@@ -170,6 +170,7 @@ LIBOBJECTS +=  \
 	library/iso_ext.o \
 	library/json.o \
 	library/lambda.o \
+	library/lua_state.o \
 	library/linda.o \
 	library/lists.o \
 	library/ordsets.o \

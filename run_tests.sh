@@ -39,9 +39,15 @@ echo "Advanced tests completed."
 echo
 
 # 5. Cycle Detection Test (Hybrid Control)
-echo "[5/5] Running Cycle Detection Test (Lua-based state)..."
+echo "[5/6] Running Cycle Detection Test (Lua-based state)..."
 $TPL_BIN -l tests/cycle_detection.pl -g "run_cycle_test, halt."
 echo "Cycle detection test completed."
+echo
+
+# 6. Idiomatic Library Test
+echo "[6/6] Running Idiomatic Library Test (library(lua_state))..."
+$TPL_BIN -l tests/idiomatic_lua_test.pl -g "run_idiomatic_test, halt."
+echo "Idiomatic library test completed."
 echo
 
 echo "===================================================="
