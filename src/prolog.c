@@ -11,6 +11,7 @@
 #include "module.h"
 #include "parser.h"
 #include "prolog.h"
+#include "bif_lua.h"
 #include "query.h"
 
 #if !defined(_WIN32) && !defined(__wasi__) && !defined(__ANDROID__)
@@ -400,6 +401,11 @@ builtins *get_fn_ptr(void *fn)
 			return ptr;
 	}
 
+	for (builtins *ptr = g_lua_bifs; ptr->name; ptr++) {
+		if (ptr->fn == fn)
+			return ptr;
+	}
+
 	for (builtins *ptr = g_posix_bifs; ptr->name; ptr++) {
 		if (ptr->fn == fn)
 			return ptr;
@@ -441,6 +447,12 @@ void load_builtins(prolog *pl)
 	}
 
 	for (const builtins *ptr = g_ffi_bifs; ptr->name; ptr++) {
+		sl_app(pl->biftab, ptr->name, ptr);
+		if (ptr->name[0] == '$') continue;
+		sl_app(pl->help, ptr->name, ptr);
+	}
+
+	for (const builtins *ptr = g_lua_bifs; ptr->name; ptr++) {
 		sl_app(pl->biftab, ptr->name, ptr);
 		if (ptr->name[0] == '$') continue;
 		sl_app(pl->help, ptr->name, ptr);

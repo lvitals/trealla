@@ -76,6 +76,15 @@ CFLAGS += -DUSE_OPENSSL=1
 LDFLAGS += -lssl -lcrypto
 endif
 
+ifdef LUA_VERSION
+LUA_PKG := lua$(LUA_VERSION)
+ifeq ($(LUA_VERSION),jit)
+LUA_PKG := luajit
+endif
+CFLAGS += $(shell pkg-config --cflags $(LUA_PKG)) -DUSE_LUA=1
+LDFLAGS += $(shell pkg-config --libs $(LUA_PKG))
+endif
+
 ifndef NOTHREADS
 CFLAGS += -DUSE_THREADS=1 -pthread
 LDFLAGS += -pthread
@@ -104,6 +113,7 @@ SRCOBJECTS = tpl.o \
 	src/bif_csv.o \
 	src/bif_database.o \
 	src/bif_ffi.o \
+	src/bif_lua.o \
 	src/bif_format.o \
 	src/bif_functions.o \
 	src/bif_maps.o \
