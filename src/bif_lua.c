@@ -28,7 +28,6 @@ static void init_lua_vm() {
 }
 
 // --- Prolog -> Lua (Recursive) ---
-// Correctly handles nested contexts by preserving them during recursion.
 static void prolog_to_lua(lua_State *L, query *q, cell *c, pl_ctx c_ctx) {
     c = deref(q, c, c_ctx);
     pl_idx actual_ctx = q->latest_ctx;
@@ -44,24 +43,13 @@ static void prolog_to_lua(lua_State *L, query *q, cell *c, pl_ctx c_ctx) {
         int index = 1;
         cell *curr = c;
         pl_idx curr_node_ctx = actual_ctx;
-        
         while (is_iso_list(curr)) {
-            // Save context of the current list node
             pl_idx saved_node_ctx = curr_node_ctx;
-            
-            // Get Head and its context
-            cell *head = deref(q, curr + 1, saved_node_ctx);
-            pl_idx head_ctx = q->latest_ctx;
-            
-            prolog_to_lua(L, q, head, head_ctx);
+            prolog_to_lua(L, q, deref(q, curr + 1, saved_node_ctx), q->latest_ctx);
             lua_rawseti(L, -2, index++);
-            
-            // Get Tail and update iteration context
             curr = deref(q, curr + 1 + 1, saved_node_ctx);
             curr_node_ctx = q->latest_ctx;
         }
-        
-        // Handle improper tail if any
         if (!is_nil(curr)) {
             prolog_to_lua(L, q, curr, curr_node_ctx);
             lua_setfield(L, -2, "_tail");
@@ -71,12 +59,10 @@ static void prolog_to_lua(lua_State *L, query *q, cell *c, pl_ctx c_ctx) {
     } else if (is_compound(c)) {
         lua_newtable(L);
         lua_pushstring(L, C_STR(q, c));
-        lua_rawseti(L, -2, 0); // Functor at index 0
-        
+        lua_rawseti(L, -2, 0); 
         int arity = (int)c->arity;
         for (int i = 1; i <= arity; i++) {
-            cell *arg = deref(q, c + i, actual_ctx);
-            prolog_to_lua(L, q, arg, q->latest_ctx);
+            prolog_to_lua(L, q, deref(q, c + i, actual_ctx), q->latest_ctx);
             lua_rawseti(L, -2, i);
         }
     } else if (is_atom(c)) {
@@ -90,27 +76,22 @@ static void prolog_to_lua(lua_State *L, query *q, cell *c, pl_ctx c_ctx) {
     }
 }
 
-// --- Lua -> Prolog (Recursive) ---
-// Simplified safe conversion to avoid heap corruption during testing.
+// --- Lua -> Prolog (Safe) ---
 static cell *lua_to_prolog(lua_State *L, int index, query *q) {
     int type = lua_type(L, index);
+    cell *c = alloc_heap(q, 1);
     if (type == LUA_TNUMBER) {
-        cell *c = alloc_heap(q, 1);
         if (lua_isinteger(L, index)) make_int(c, lua_tointeger(L, index));
         else make_float(c, lua_tonumber(L, index));
-        return c;
     } else if (type == LUA_TSTRING) {
-        cell *c = alloc_heap(q, 1);
         make_atom(c, new_atom(q->pl, lua_tostring(L, index)));
-        return c;
+    } else if (type == LUA_TBOOLEAN) {
+        make_atom(c, lua_toboolean(L, index) ? g_true_s : g_fail_s);
     } else if (type == LUA_TTABLE) {
-        // Return 'true' for complex tables to ensure stability for now
-        cell *c = alloc_heap(q, 1);
         make_atom(c, g_true_s);
-        return c;
+    } else {
+        make_atom(c, g_nil_s);
     }
-    cell *c = alloc_heap(q, 1);
-    make_atom(c, g_nil_s);
     return c;
 }
 
@@ -148,6 +129,13 @@ bool bif_lua_call_3(query *q) {
         fprintf(stderr, "Lua Error: %s\n", lua_tostring(g_lua_vm, -1));
         lua_pop(g_lua_vm, 1); return false;
     }
+    
+    // Check if we expect a failure (Lua false -> Prolog fail)
+    if (lua_isboolean(g_lua_vm, -1) && !lua_toboolean(g_lua_vm, -1)) {
+        lua_pop(g_lua_vm, 1);
+        return false;
+    }
+
     cell *res = lua_to_prolog(g_lua_vm, -1, q);
     bool ok = unify(q, p3, p3_ctx, res, q->st.cur_ctx);
     lua_pop(g_lua_vm, 1);

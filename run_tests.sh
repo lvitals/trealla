@@ -33,9 +33,15 @@ echo "Functional tests completed."
 echo
 
 # 4. Advanced API Features (Backing Store & Backtracking)
-echo "[4/4] Running Advanced API Tests (Store & Yield)..."
+echo "[4/5] Running Advanced API Tests (Store & Yield)..."
 $TPL_BIN -l tests/advanced_lua_test.pl -g "run_advanced_tests, halt."
 echo "Advanced tests completed."
+echo
+
+# 5. Cycle Detection Test (Hybrid Control)
+echo "[5/5] Running Cycle Detection Test (Lua-based state)..."
+$TPL_BIN -l tests/cycle_detection.pl -g "run_cycle_test, halt."
+echo "Cycle detection test completed."
 echo
 
 echo "===================================================="
