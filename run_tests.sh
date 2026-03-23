@@ -51,9 +51,27 @@ echo "Idiomatic library test completed."
 echo
 
 # 7. Lua Sets & Math Test
-echo "[7/7] Running Lua Sets & Math Test (library(lua_math))..."
+echo "[7/10] Running Lua Sets & Math Test (library(lua_math))..."
 $TPL_BIN -l tests/lua_sets_test.pl -g "run_set_tests, halt."
 echo "Lua Sets & Math test completed."
+echo
+
+# 8. Pure Cycle Detection Test
+echo "[8/10] Running Pure Cycle Detection Test (Baseline)..."
+$TPL_BIN -l tests/cycle_detection_pure.pl -g "run_cycle_test, halt."
+echo "Pure cycle detection test completed."
+echo
+
+# 9. Performance Hybrid Benchmark
+echo "[9/10] Running Comprehensive Hybrid Benchmark (Trealla + Lua)..."
+$TPL_BIN -l tests/performance_hybrid.pl -g "run_hybrid_benchmark, halt."
+echo "Hybrid benchmark completed."
+echo
+
+# 10. Performance Pure Benchmark
+echo "[10/10] Running Comprehensive Pure Benchmark (Prolog Standard)..."
+$TPL_BIN -l tests/performance_pure.pl -g "run_pure_benchmark, halt."
+echo "Pure benchmark completed."
 echo
 
 echo "===================================================="
