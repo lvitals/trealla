@@ -45,9 +45,15 @@ echo "Cycle detection test completed."
 echo
 
 # 6. Idiomatic Library Test
-echo "[6/6] Running Idiomatic Library Test (library(lua_state))..."
+echo "[6/7] Running Idiomatic Library Test (library(lua_state))..."
 $TPL_BIN -l tests/idiomatic_lua_test.pl -g "run_idiomatic_test, halt."
 echo "Idiomatic library test completed."
+echo
+
+# 7. Lua Sets & Math Test
+echo "[7/7] Running Lua Sets & Math Test (library(lua_math))..."
+$TPL_BIN -l tests/lua_sets_test.pl -g "run_set_tests, halt."
+echo "Lua Sets & Math test completed."
 echo
 
 echo "===================================================="
