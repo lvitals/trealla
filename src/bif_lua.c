@@ -34,6 +34,7 @@ void init_lua_vm() {
 
 // --- Prolog -> Lua (Recursive) ---
 void prolog_to_lua(lua_State *L, query *q, cell *c, pl_ctx c_ctx) {
+    if (!lua_checkstack(L, 20)) return;
     c = deref(q, c, c_ctx);
     pl_idx actual_ctx = q->latest_ctx;
 
@@ -82,82 +83,99 @@ void prolog_to_lua(lua_State *L, query *q, cell *c, pl_ctx c_ctx) {
 }
 
 // --- Lua -> Prolog (Recursive using tmp_heap scratchpad) ---
-static unsigned lua_to_tmp_heap(lua_State *L, int index, query *q) {
+static unsigned lua_to_tmp_heap(lua_State *L, int index, query *q, bool force_list) {
+    if (!lua_checkstack(L, 20)) return 0;
     index = lua_absindex(L, index);
     int type = lua_type(L, index);
-    pl_idx start = tmp_heap_used(q);
+    pl_idx start = q->tmphp;
     
     if (type == LUA_TNUMBER) {
         cell *c = alloc_tmp(q, 1);
         if (lua_isinteger(L, index)) make_int(c, lua_tointeger(L, index));
         else make_float(c, lua_tonumber(L, index));
         c->num_cells = 1;
+        c->flags = 0;
         return 1;
     } else if (type == LUA_TSTRING) {
         cell *c = alloc_tmp(q, 1);
         make_atom(c, new_atom(q->pl, lua_tostring(L, index)));
         c->num_cells = 1;
+        c->flags = 0;
         return 1;
     } else if (type == LUA_TBOOLEAN) {
         cell *c = alloc_tmp(q, 1);
         make_atom(c, lua_toboolean(L, index) ? g_true_s : g_fail_s);
         c->num_cells = 1;
+        c->flags = 0;
         return 1;
     } else if (type == LUA_TTABLE) {
+        // Compound check: [0] = "functor"
         lua_rawgeti(L, index, 0);
-        bool is_struct = lua_isstring(L, -1);
-        if (is_struct) {
+        if (lua_isstring(L, -1)) {
             const char *functor = lua_tostring(L, -1);
             lua_pop(L, 1);
             int arity = (int)lua_rawlen(L, index);
             cell *c = alloc_tmp(q, 1);
             make_atom(c, new_atom(q->pl, functor));
             c->arity = arity;
+            c->flags = 0;
             for (int i = 1; i <= arity; i++) {
                 lua_rawgeti(L, index, i);
-                lua_to_tmp_heap(L, -1, q);
+                lua_to_tmp_heap(L, -1, q, true);
                 lua_pop(L, 1);
             }
-            pl_idx end = tmp_heap_used(q);
-            c = q->tmp_heap + start;
-            c->num_cells = end - start;
+            pl_idx end = q->tmphp;
+            get_tmp_heap(q, start)->num_cells = end - start;
             return end - start;
         }
         lua_pop(L, 1);
+
+        // Standard tables (lists/sets) return 'true' unless list content is required
+        if (!force_list) {
+            cell *c = alloc_tmp(q, 1);
+            make_atom(c, g_true_s);
+            c->num_cells = 1;
+            c->flags = 0;
+            return 1;
+        }
 
         int n = (int)lua_rawlen(L, index);
         if (n == 0) {
             cell *c = alloc_tmp(q, 1);
             make_atom(c, g_nil_s);
             c->num_cells = 1;
+            c->flags = 0;
             return 1;
         }
         
         for (int i = 1; i <= n; i++) {
-            alloc_tmp(q, 1); // dot
+            alloc_tmp(q, 1); // placeholder for dot
             lua_rawgeti(L, index, i);
-            lua_to_tmp_heap(L, -1, q);
+            lua_to_tmp_heap(L, -1, q, true);
             lua_pop(L, 1);
         }
         cell *nil = alloc_tmp(q, 1);
         make_atom(nil, g_nil_s);
         nil->num_cells = 1;
+        nil->flags = 0;
         
-        pl_idx end = tmp_heap_used(q);
+        pl_idx end = q->tmphp;
         pl_idx curr = start;
         for (int i = 1; i <= n; i++) {
-            cell *dot = q->tmp_heap + curr;
+            cell *dot = get_tmp_heap(q, curr);
             make_atom(dot, g_dot_s);
             dot->arity = 2;
             dot->num_cells = end - curr;
+            dot->flags = 0;
             curr++; // Dot
-            curr += (q->tmp_heap + curr)->num_cells; // Head
+            curr += get_tmp_heap(q, curr)->num_cells; // Head
         }
         return end - start;
     } else {
         cell *c = alloc_tmp(q, 1);
         make_atom(c, g_nil_s);
         c->num_cells = 1;
+        c->flags = 0;
         return 1;
     }
 }
@@ -165,9 +183,22 @@ static unsigned lua_to_tmp_heap(lua_State *L, int index, query *q) {
 cell *lua_to_prolog(lua_State *L, int index, query *q) {
     pl_idx save_tmphp = q->tmphp;
     if (save_tmphp == 0) init_tmp_heap(q);
-    lua_to_tmp_heap(L, index, q);
+    lua_to_tmp_heap(L, index, q, false);
     pl_idx num_cells = q->tmphp - save_tmphp;
     cell *res = alloc_heap(q, num_cells);
+    if (!res) return NULL;
+    dup_cells(res, q->tmp_heap + save_tmphp, num_cells);
+    q->tmphp = save_tmphp;
+    return res;
+}
+
+static cell *lua_to_prolog_list(lua_State *L, int index, query *q) {
+    pl_idx save_tmphp = q->tmphp;
+    if (save_tmphp == 0) init_tmp_heap(q);
+    lua_to_tmp_heap(L, index, q, true);
+    pl_idx num_cells = q->tmphp - save_tmphp;
+    cell *res = alloc_heap(q, num_cells);
+    if (!res) return NULL;
     dup_cells(res, q->tmp_heap + save_tmphp, num_cells);
     q->tmphp = save_tmphp;
     return res;
@@ -303,7 +334,7 @@ bool bif_lua_fib_2(query *q) {
     GET_FIRST_ARG(p1, integer);
     GET_NEXT_ARG(p2, any);
     long long n = (long long)get_smallint(p1);
-    long long a = 1, b = 1; // Matches test053.pl (1-based start)
+    long long a = 1, b = 1; // F(0)=1, F(1)=1 matches test053.pl
     for (long long i = 0; i < n; i++) {
         long long tmp = a;
         a = b;
@@ -311,6 +342,8 @@ bool bif_lua_fib_2(query *q) {
     }
     cell res;
     make_int(&res, a);
+    res.num_cells = 1;
+    res.flags = 0;
     return unify(q, p2, p2_ctx, &res, q->st.cur_ctx);
 }
 
@@ -323,6 +356,8 @@ bool bif_lua_gcd_3(query *q) {
     while (b) { a %= b; long long t = a; a = b; b = t; }
     cell res;
     make_int(&res, a);
+    res.num_cells = 1;
+    res.flags = 0;
     return unify(q, p3, p3_ctx, &res, q->st.cur_ctx);
 }
 
@@ -344,50 +379,54 @@ bool bif_lua_union_3(query *q) {
     GET_NEXT_ARG(p2, any);
     GET_NEXT_ARG(p3, any);
     init_lua_vm();
-    lua_settop(g_lua_vm, 0);
-    lua_newtable(g_lua_vm); // 1: Seen Set
-    lua_newtable(g_lua_vm); // 2: Res List
+    int top = lua_gettop(g_lua_vm);
+    lua_checkstack(g_lua_vm, 50);
+    lua_newtable(g_lua_vm); // Set
+    lua_newtable(g_lua_vm); // Result List
     int res_idx = 1;
     
-    prolog_to_lua(g_lua_vm, q, p1, p1_ctx); // 3: L1
-    if (lua_istable(g_lua_vm, 3)) {
-        int n = (int)lua_rawlen(g_lua_vm, 3);
+    prolog_to_lua(g_lua_vm, q, p1, p1_ctx); // L1
+    if (lua_istable(g_lua_vm, -1)) {
+        int n = (int)lua_rawlen(g_lua_vm, -1);
         for (int i = 1; i <= n; i++) {
-            lua_rawgeti(g_lua_vm, 3, i); // 4: Elem
-            lua_pushvalue(g_lua_vm, 4);
-            lua_gettable(g_lua_vm, 1);
+            lua_rawgeti(g_lua_vm, -1, i);
+            lua_pushvalue(g_lua_vm, -1);
+            lua_gettable(g_lua_vm, top + 1);
             if (lua_isnil(g_lua_vm, -1)) {
                 lua_pop(g_lua_vm, 1);
-                lua_pushvalue(g_lua_vm, 4);
+                lua_pushvalue(g_lua_vm, -1);
                 lua_pushboolean(g_lua_vm, 1);
-                lua_settable(g_lua_vm, 1);
-                lua_pushvalue(g_lua_vm, 4);
-                lua_rawseti(g_lua_vm, 2, res_idx++);
+                lua_settable(g_lua_vm, top + 1);
+                lua_pushvalue(g_lua_vm, -1);
+                lua_rawseti(g_lua_vm, top + 2, res_idx++);
             } else lua_pop(g_lua_vm, 1);
             lua_pop(g_lua_vm, 1);
         }
     }
+    lua_pop(g_lua_vm, 1);
     
-    prolog_to_lua(g_lua_vm, q, p2, p2_ctx); // 4: L2
-    if (lua_istable(g_lua_vm, 4)) {
-        int n = (int)lua_rawlen(g_lua_vm, 4);
+    prolog_to_lua(g_lua_vm, q, p2, p2_ctx); // L2
+    if (lua_istable(g_lua_vm, -1)) {
+        int n = (int)lua_rawlen(g_lua_vm, -1);
         for (int i = 1; i <= n; i++) {
-            lua_rawgeti(g_lua_vm, 4, i); // 5: Elem
-            lua_pushvalue(g_lua_vm, 5);
-            lua_gettable(g_lua_vm, 1);
+            lua_rawgeti(g_lua_vm, -1, i);
+            lua_pushvalue(g_lua_vm, -1);
+            lua_gettable(g_lua_vm, top + 1);
             if (lua_isnil(g_lua_vm, -1)) {
                 lua_pop(g_lua_vm, 1);
-                lua_pushvalue(g_lua_vm, 5);
+                lua_pushvalue(g_lua_vm, -1);
                 lua_pushboolean(g_lua_vm, 1);
-                lua_settable(g_lua_vm, 1);
-                lua_pushvalue(g_lua_vm, 5);
-                lua_rawseti(g_lua_vm, 2, res_idx++);
+                lua_settable(g_lua_vm, top + 1);
+                lua_pushvalue(g_lua_vm, -1);
+                lua_rawseti(g_lua_vm, top + 2, res_idx++);
             } else lua_pop(g_lua_vm, 1);
             lua_pop(g_lua_vm, 1);
         }
     }
+    lua_pop(g_lua_vm, 1);
     
-    cell *res = lua_to_prolog(g_lua_vm, 2, q);
+    cell *res = lua_to_prolog_list(g_lua_vm, top + 2, q);
+    lua_settop(g_lua_vm, top);
     return unify(q, p3, p3_ctx, res, q->st.cur_ctx);
 }
 
@@ -396,37 +435,42 @@ bool bif_lua_intersection_3(query *q) {
     GET_NEXT_ARG(p2, any);
     GET_NEXT_ARG(p3, any);
     init_lua_vm();
-    lua_settop(g_lua_vm, 0);
-    lua_newtable(g_lua_vm); // 1: L1 Set
-    lua_newtable(g_lua_vm); // 2: Res List
+    int top = lua_gettop(g_lua_vm);
+    lua_checkstack(g_lua_vm, 50);
+    lua_newtable(g_lua_vm); // Set
+    lua_newtable(g_lua_vm); // Result List
     int res_idx = 1;
     
-    prolog_to_lua(g_lua_vm, q, p1, p1_ctx); // 3: L1
-    if (lua_istable(g_lua_vm, 3)) {
-        int n = (int)lua_rawlen(g_lua_vm, 3);
+    prolog_to_lua(g_lua_vm, q, p1, p1_ctx); // L1
+    if (lua_istable(g_lua_vm, -1)) {
+        int n = (int)lua_rawlen(g_lua_vm, -1);
         for (int i = 1; i <= n; i++) {
-            lua_rawgeti(g_lua_vm, 3, i);
+            lua_rawgeti(g_lua_vm, -1, i);
             lua_pushboolean(g_lua_vm, 1);
-            lua_settable(g_lua_vm, 1);
+            lua_settable(g_lua_vm, top + 1);
+        }
+    }
+    lua_pop(g_lua_vm, 1);
+    
+    prolog_to_lua(g_lua_vm, q, p2, p2_ctx); // L2
+    if (lua_istable(g_lua_vm, -1)) {
+        int n = (int)lua_rawlen(g_lua_vm, -1);
+        for (int i = 1; i <= n; i++) {
+            lua_rawgeti(g_lua_vm, -1, i);
+            lua_pushvalue(g_lua_vm, -1);
+            lua_gettable(g_lua_vm, top + 1);
+            if (!lua_isnil(g_lua_vm, -1)) {
+                lua_pop(g_lua_vm, 1);
+                lua_pushvalue(g_lua_vm, -1);
+                lua_rawseti(g_lua_vm, top + 2, res_idx++);
+            } else lua_pop(g_lua_vm, 1);
             lua_pop(g_lua_vm, 1);
         }
     }
+    lua_pop(g_lua_vm, 1);
     
-    prolog_to_lua(g_lua_vm, q, p2, p2_ctx); // 4: L2
-    if (lua_istable(g_lua_vm, 4)) {
-        int n = (int)lua_rawlen(g_lua_vm, 4);
-        for (int i = 1; i <= n; i++) {
-            lua_rawgeti(g_lua_vm, 4, i); // 5: Elem
-            lua_pushvalue(g_lua_vm, 5);
-            lua_gettable(g_lua_vm, 1);
-            if (!lua_isnil(g_lua_vm, -1)) {
-                lua_pushvalue(g_lua_vm, 5);
-                lua_rawseti(g_lua_vm, 2, res_idx++);
-            }
-            lua_pop(g_lua_vm, 2);
-        }
-    }
-    cell *res = lua_to_prolog(g_lua_vm, 2, q);
+    cell *res = lua_to_prolog_list(g_lua_vm, top + 2, q);
+    lua_settop(g_lua_vm, top);
     return unify(q, p3, p3_ctx, res, q->st.cur_ctx);
 }
 
@@ -434,34 +478,38 @@ bool bif_lua_powerset_2(query *q) {
     GET_FIRST_ARG(p1, any);
     GET_NEXT_ARG(p2, any);
     init_lua_vm();
-    lua_settop(g_lua_vm, 0);
-    lua_newtable(g_lua_vm); // 1: Result
-    lua_newtable(g_lua_vm); // 2: empty set
-    lua_rawseti(g_lua_vm, 1, 1);
+    int top = lua_gettop(g_lua_vm);
+    lua_checkstack(g_lua_vm, 100);
+    lua_newtable(g_lua_vm); // Result
+    lua_newtable(g_lua_vm); // empty set
+    lua_rawseti(g_lua_vm, -2, 1);
     
-    prolog_to_lua(g_lua_vm, q, p1, p1_ctx); // 2: Input
-    if (lua_istable(g_lua_vm, 2)) {
-        int n = (int)lua_rawlen(g_lua_vm, 2);
+    prolog_to_lua(g_lua_vm, q, p1, p1_ctx); // Input
+    if (lua_istable(g_lua_vm, -1)) {
+        int n = (int)lua_rawlen(g_lua_vm, -1);
         for (int i = 1; i <= n; i++) {
-            lua_rawgeti(g_lua_vm, 2, i); // 3: Elem
-            int cur_len = (int)lua_rawlen(g_lua_vm, 1);
+            lua_rawgeti(g_lua_vm, -1, i); // Elem
+            int cur_len = (int)lua_rawlen(g_lua_vm, top + 1);
             for (int j = 1; j <= cur_len; j++) {
-                lua_rawgeti(g_lua_vm, 1, j); // 4: Set
-                int set_len = (int)lua_rawlen(g_lua_vm, 4);
-                lua_newtable(g_lua_vm); // 5: New set
+                lua_rawgeti(g_lua_vm, top + 1, j); // Existing set
+                int set_len = (int)lua_rawlen(g_lua_vm, -1);
+                lua_newtable(g_lua_vm); // New set
                 for (int k = 1; k <= set_len; k++) {
-                    lua_rawgeti(g_lua_vm, 4, k);
-                    lua_rawseti(g_lua_vm, 5, k);
+                    lua_rawgeti(g_lua_vm, -2, k);
+                    lua_rawseti(g_lua_vm, -2, k);
                 }
-                lua_pushvalue(g_lua_vm, 3);
-                lua_rawseti(g_lua_vm, 5, set_len + 1);
-                lua_rawseti(g_lua_vm, 1, cur_len + j);
+                lua_pushvalue(g_lua_vm, -3); // Current Elem
+                lua_rawseti(g_lua_vm, -2, set_len + 1);
+                lua_rawseti(g_lua_vm, top + 1, cur_len + j);
                 lua_pop(g_lua_vm, 1);
             }
             lua_pop(g_lua_vm, 1);
         }
     }
-    cell *res = lua_to_prolog(g_lua_vm, 1, q);
+    lua_pop(g_lua_vm, 1);
+    
+    cell *res = lua_to_prolog(g_lua_vm, top + 1, q);
+    lua_settop(g_lua_vm, top);
     return unify(q, p2, p2_ctx, res, q->st.cur_ctx);
 }
 

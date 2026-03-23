@@ -6,9 +6,13 @@
 # Exit on any error
 set -e
 
+# Get the directory of this script
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+ROOT_DIR="$( cd "$SCRIPT_DIR/../../" &> /dev/null && pwd )"
+
 # Configuration
 LUA_VER="5.4"
-TPL_BIN="../../tpl"
+TPL_BIN="$ROOT_DIR/tpl"
 
 echo "===================================================="
 echo "   Trealla-Lua Integration: Automated Test Suite"
@@ -16,10 +20,12 @@ echo "===================================================="
 
 # 1. Compilation
 echo "[1/4] Compiling Trealla with Lua support..."
-# Go up to root to compile
-(cd ../../ && make LUA=1 -j$(nproc))
+(cd "$ROOT_DIR" && make LUA=1 -j$(nproc))
 echo "Compilation successful."
 echo
+
+# Move to script directory to ensure relative paths for tests work
+cd "$SCRIPT_DIR"
 
 # 2. Performance Benchmark (Fibonacci)
 echo "[2/4] Running Performance Benchmark (Fibonacci 40)..."
