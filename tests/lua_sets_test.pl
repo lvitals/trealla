@@ -1,5 +1,5 @@
 % Test suite for Lua-accelerated Set operations
-:- use_module(library(lua_math)).
+% Lua Math is now native. No import needed.
 
 test_union :-
     write('Testing Set Union... '),

@@ -10,6 +10,61 @@
 #include "module.h"
 #include "prolog.h"
 #include "query.h"
+#ifdef USE_LUA
+#include "bif_lua.h"
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+
+extern lua_State *g_lua_vm;
+
+bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) {
+    init_lua_vm();
+    const char *full_name = C_STR(q, c);
+    char name[256];
+    strncpy(name, full_name, sizeof(name));
+    name[sizeof(name)-1] = '\0';
+
+    // Resolve nested tables (e.g. math.sqrt)
+    char *token = strtok(name, ".");
+    lua_getglobal(g_lua_vm, token);
+    
+    while ((token = strtok(NULL, ".")) != NULL) {
+        if (!lua_istable(g_lua_vm, -1)) {
+            lua_pop(g_lua_vm, 1);
+            return false;
+        }
+        lua_getfield(g_lua_vm, -1, token);
+        lua_remove(g_lua_vm, -2);
+    }
+
+    if (!lua_isfunction(g_lua_vm, -1)) {
+        lua_pop(g_lua_vm, 1);
+        return false;
+    }
+
+    int arity = c->arity;
+    for (int i = 1; i <= arity; i++) {
+        cell *arg = deref(q, c + i, c_ctx);
+        prolog_to_lua(g_lua_vm, q, arg, q->latest_ctx);
+    }
+
+    if (lua_pcall(g_lua_vm, arity, 1, 0) != 0) {
+        fprintf(stderr, "Lua Error in expression: %s\n", lua_tostring(g_lua_vm, -1));
+        lua_pop(g_lua_vm, 1);
+        return false;
+    }
+
+    cell *res = lua_to_prolog(g_lua_vm, -1, q);
+    q->accum = *res;
+    lua_pop(g_lua_vm, 1);
+    return true;
+}
+#else
+bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) {
+    return false;
+}
+#endif
 
 #define SET_ACCUM() {											\
 	if (errno == ENOMEM)										\

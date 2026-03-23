@@ -81,8 +81,8 @@ LUA_PKG := lua$(LUA_VERSION)
 ifeq ($(LUA_VERSION),jit)
 LUA_PKG := luajit
 endif
-CFLAGS += $(shell pkg-config --cflags $(LUA_PKG)) -DUSE_LUA=1
-LDFLAGS += $(shell pkg-config --libs $(LUA_PKG))
+CFLAGS += $(shell pkg-config --cflags $(LUA_PKG) 2>/dev/null || echo "") -DUSE_LUA=1
+LDFLAGS += $(shell pkg-config --libs $(LUA_PKG) 2>/dev/null || echo "-llua")
 endif
 
 ifndef NOTHREADS
@@ -170,8 +170,6 @@ LIBOBJECTS +=  \
 	library/iso_ext.o \
 	library/json.o \
 	library/lambda.o \
-	library/lua_state.o \
-	library/lua_math.o \
 	library/linda.o \
 	library/lists.o \
 	library/ordsets.o \

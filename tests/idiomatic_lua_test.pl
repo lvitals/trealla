@@ -1,5 +1,5 @@
 % Idiomatic Test using the lua_state abstraction library
-:- use_module(library(lua_state)).
+% Native State Visit (No import needed)
 
 % --- Graph with a Cycle ---
 edge(a, b).

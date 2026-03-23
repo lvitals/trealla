@@ -1,5 +1,4 @@
-:- use_module(library(lua_state)).
-:- use_module(library(lua_math)).
+% Lua Math and State are now native. No imports needed.
 
 % --- 1. Math Stress (Now Idiomatic) ---
 stress_math(N, R) :-
