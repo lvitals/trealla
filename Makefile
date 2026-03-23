@@ -171,6 +171,7 @@ LIBOBJECTS +=  \
 	library/json.o \
 	library/lambda.o \
 	library/lua_state.o \
+	library/lua_math.o \
 	library/linda.o \
 	library/lists.o \
 	library/ordsets.o \

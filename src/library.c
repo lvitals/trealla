@@ -41,6 +41,8 @@ extern unsigned char library_lambda_pl[];
 extern unsigned int library_lambda_pl_len;
 extern unsigned char library_lua_state_pl[];
 extern unsigned int library_lua_state_pl_len;
+extern unsigned char library_lua_math_pl[];
+extern unsigned int library_lua_math_pl_len;
 extern unsigned char library_ugraphs_pl[];
 extern unsigned int library_ugraphs_pl_len;
 extern unsigned char library_sqlite3_pl[];
@@ -112,6 +114,7 @@ library g_libs[] = {
 	 {"json", library_json_pl, &library_json_pl_len},
 	 {"lambda", library_lambda_pl, &library_lambda_pl_len},
 	 {"lua_state", library_lua_state_pl, &library_lua_state_pl_len},
+	 {"lua_math", library_lua_math_pl, &library_lua_math_pl_len},
 	 {"linda", library_linda_pl, &library_linda_pl_len},
 	 {"lists", library_lists_pl, &library_lists_pl_len},
 	 {"ordsets", library_ordsets_pl, &library_ordsets_pl_len},

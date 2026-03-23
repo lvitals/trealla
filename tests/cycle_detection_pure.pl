@@ -24,7 +24,7 @@ find_path(X, Y, Visited) :-
     find_path(Z, Y, [Z|Visited]).
 
 % Helper test predicate
-run_pure_test :-
+run_cycle_test :-
     write('Searching for path from a to d (Pure Prolog)...'), nl,
     (path(a, d) -> write('Test Passed!') ; write('Test Failed')), nl,
     halt.
