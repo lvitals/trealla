@@ -60,10 +60,6 @@ bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) {
     lua_pop(g_lua_vm, 1);
     return true;
 }
-#else
-bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) {
-    return false;
-}
 #endif
 
 #define SET_ACCUM() {											\

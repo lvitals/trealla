@@ -76,7 +76,9 @@ CFLAGS += -DUSE_OPENSSL=1
 LDFLAGS += -lssl -lcrypto
 endif
 
-ifdef LUA_VERSION
+# Lua support (Optional, enable with LUA=1)
+ifeq ($(LUA),1)
+LUA_VERSION ?= 5.4
 LUA_PKG := lua$(LUA_VERSION)
 ifeq ($(LUA_VERSION),jit)
 LUA_PKG := luajit
@@ -113,9 +115,9 @@ SRCOBJECTS = tpl.o \
 	src/bif_csv.o \
 	src/bif_database.o \
 	src/bif_ffi.o \
-	src/bif_lua.o \
 	src/bif_format.o \
 	src/bif_functions.o \
+	src/bif_lua.o \
 	src/bif_maps.o \
 	src/bif_os.o \
 	src/bif_posix.o \
