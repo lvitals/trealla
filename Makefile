@@ -206,6 +206,18 @@ library/%.c: library/%.pl util/bin2c
 
 all: tpl
 
+trealla.so: CFLAGS += -fPIC
+trealla.so: $(OBJECTS) src/lua_trealla.o Makefile README.md LICENSE
+	rm -f src/version.o
+	$(CC) $(CFLAGS) -o src/version.o -c src/version.c
+	$(CC) $(CFLAGS) -shared -o trealla.so src/lua_trealla.o $(OBJECTS) $(LDFLAGS)
+
+libtrealla.so: CFLAGS += -fPIC
+libtrealla.so: $(OBJECTS) Makefile README.md LICENSE
+	rm -f src/version.o
+	$(CC) $(CFLAGS) -o src/version.o -c src/version.c
+	$(CC) $(CFLAGS) -shared -o libtrealla.so $(OBJECTS) $(LDFLAGS)
+
 tpl: $(OBJECTS) Makefile README.md LICENSE
 	rm src/version.o
 	$(CC) $(CFLAGS) -o src/version.o -c src/version.c
