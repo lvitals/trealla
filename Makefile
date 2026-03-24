@@ -76,6 +76,8 @@ CFLAGS += -DUSE_OPENSSL=1
 LDFLAGS += -lssl -lcrypto
 endif
 
+LUA ?= 0
+
 # Lua support (Optional, enable with LUA=1)
 ifeq ($(LUA),1)
 LUA_VERSION ?= 5.4

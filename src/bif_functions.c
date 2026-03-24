@@ -56,6 +56,10 @@ bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) {
     }
 
     cell *res = lua_to_prolog(g_lua_vm, -1, q);
+    if (!res) {
+        lua_pop(g_lua_vm, 1);
+        return false;
+    }
     q->accum = *res;
     lua_pop(g_lua_vm, 1);
     return true;
