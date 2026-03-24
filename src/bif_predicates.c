@@ -4567,9 +4567,56 @@ static bool bif_atomic_concat_3(query *q)
 
 static bool bif_atomic_list_concat_3(query *q)
 {
-	GET_FIRST_ARG(p1,iso_list_or_nil);
+	GET_FIRST_ARG(p1,any);
 	GET_NEXT_ARG(p2,atomic);
-	GET_NEXT_ARG(p3,atom_or_var);
+	GET_NEXT_ARG(p3,any);
+
+	if (is_var(p1)) {
+		if (!is_atomic(p3))
+			return throw_error(q, p3, p3_ctx, "type_error", "atomic");
+		if (is_var(p3))
+			return throw_error(q, p3, p3_ctx, "instantiation_error", "atomic");
+
+		const char *src = C_STR(q, p3);
+		const char *sep = C_STR(q, p2);
+		size_t seplen = C_STRLEN(q, p2);
+
+		if (seplen == 0) {
+			// Split into characters if separator is empty
+			init_tmp_heap(q);
+			while (*src) {
+				size_t len = len_char_utf8(src);
+				cell tmp;
+				make_cstringn(&tmp, src, len);
+				append_list(q, &tmp);
+				unshare_cell(&tmp);
+				src += len;
+			}
+			cell *res = end_list(q);
+			return unify(q, p1, p1_ctx, res, q->st.cur_ctx);
+		}
+
+		init_tmp_heap(q);
+		const char *pos;
+		while ((pos = strstr(src, sep)) != NULL) {
+			size_t len = pos - src;
+			cell tmp;
+			make_cstringn(&tmp, src, len);
+			append_list(q, &tmp);
+			unshare_cell(&tmp);
+			src = pos + seplen;
+		}
+		cell tmp;
+		make_cstring(&tmp, src);
+		append_list(q, &tmp);
+		unshare_cell(&tmp);
+		cell *res = end_list(q);
+		return unify(q, p1, p1_ctx, res, q->st.cur_ctx);
+	}
+
+	if (!is_list(p1) && !is_nil(p1))
+		return throw_error(q, p1, p1_ctx, "type_error", "list");
+
 	LIST_HANDLER(p1);
 	SB(pr);
 
@@ -4577,11 +4624,15 @@ static bool bif_atomic_list_concat_3(query *q)
 		cell *h = LIST_HEAD(p1);
 		h = deref(q, h, p1_ctx);
 
-		if (is_var(h))
+		if (is_var(h)) {
+			SB_free(pr);
 			return throw_error(q, h, q->latest_ctx, "instantiation_error", "atomic");
+		}
 
-		if (!is_atomic(h))
+		if (!is_atomic(h)) {
+			SB_free(pr);
 			return throw_error(q, h, q->latest_ctx, "type_error", "atomic");
+		}
 
 		q->parens = true;
 		char *dst = print_term_to_strbuf(q, h, q->latest_ctx, 1);
@@ -4601,9 +4652,6 @@ static bool bif_atomic_list_concat_3(query *q)
 			free(dst);
 		}
 	}
-
-	if (is_var(p1))
-		return throw_error(q, p1, p1_ctx, "instantiation_error", "atomic_list_concat/3");
 
 	cell tmp;
 	make_cstring(&tmp, SB_cstr(pr));
