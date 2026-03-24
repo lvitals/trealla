@@ -206,6 +206,10 @@ library/%.c: library/%.pl util/bin2c
 	echo '#include <stddef.h>' > $@
 	./util/bin2c $< >> $@
 
+ifneq ($(filter trealla.so libtrealla.so,$(MAKECMDGOALS)),)
+CFLAGS += -fPIC
+endif
+
 all: tpl
 
 trealla.so: CFLAGS += -fPIC
