@@ -10,7 +10,28 @@ O Trealla é um interpretador Prolog moderno e compacto, focado em eficiência d
 
 ### 1.1 Células (Cells)
 A unidade fundamental de dados é a `cell`, uma estrutura de **24 bytes** no sistema 64-bit.
-- **Tags:** Cada célula possui uma tag (8 bits) que define seu tipo (Atom, Var, Int, Float, Compound, List, etc).
+- **Tags:** Cada célula possui uma tag (8 bits) que define seu tipo. Abaixo está a lista completa de tags extraída de `src/internal.h`:
+
+| Tag | Valor | Descrição |
+| :--- | :---: | :--- |
+| **`TAG_EMPTY`** | 0 | Célula vazia ou não inicializada (usada em slots e trail). |
+| **`TAG_VAR`** | 1 | Variável Prolog (referência com contexto ou anônima). |
+| **`TAG_INTERNED`** | 2 | Átomo ou Functor internado na tabela de símbolos global. |
+| **`TAG_CSTR`** | 3 | String pequena (Small String) otimizada diretamente na célula (< 16 bytes). |
+| **`TAG_INT`** | 4 | Inteiro de 64 bits (inclui BigInt via `FLAG_INT_BIG`). |
+| **`TAG_FLOAT`** | 5 | Número de ponto flutuante de precisão dupla (64-bit double). |
+| **`TAG_RATIONAL`** | 6 | Número racional (aritmética de alta precisão). |
+| **`TAG_INDIRECT`** | 7 | Ponteiro indireto para outro termo (evita cópias profundas). |
+| **`TAG_BLOB`** | 8 | Objeto binário opaco ou string longa (ref-counted ou estática). |
+| **`TAG_DBID`** | 9 | Identificador interno de banco de dados (referência a cláusula). |
+| **`TAG_KVID`** | 10 | Identificador de par Chave-Valor (usado em Skip Lists/Maps). |
+| **`TAG_END`** | 11 | Marcador de fim de termo ou sentinela. |
+
+#### Observações Técnicas:
+- **Termos Compostos:** Um termo composto (Compound) é definido por uma `TAG_INTERNED` com `arity > 0`.
+- **Listas:** Uma lista é um caso especial de composto (`TAG_INTERNED`, `arity == 2`) onde o functor aponta para o símbolo `.`.
+- **Referências:** Se uma `TAG_VAR` possui o flag `FLAG_VAR_REF` setado, ela atua como uma referência a um slot em um contexto específico (`val_ctx`).
+- **Despacho Rápido:** O motor utiliza uma tabela de despacho (`g_disp`) indexada por estas tags para executar unificação e comparação sem condicionais complexas.
 - **Num_cells:** Em termos compostos ou listas, a primeira célula indica quantas células subsequentes formam o termo completo, permitindo uma travessia linear rápida.
 - **Interning:** Átomos e functores são "internados" em uma tabela de símbolos global, permitindo que a unificação seja uma simples comparação de ponteiros/offsets.
 
@@ -102,6 +123,45 @@ Através do Lua, o Trealla ganha acesso imediato a:
 
 ---
 
-## 6. Conclusão
+## 7. Mapeamento da Biblioteca Padrão (Standard Library)
 
-A arquitetura do Trealla Prolog + Lua representa um equilíbrio entre o poder de raciocínio lógico e a eficiência computacional moderna. Enquanto o Trealla cuida da busca, unificação e lógica, o Lua atua como um co-processador matemático e um gestor de memória global eficiente. Esta integração torna o Trealla uma ferramenta superior para sistemas embarcados, agentes de IA e aplicações WebAssembly que exigem alto desempenho e flexibilidade.
+O Trealla Prolog vem acompanhado de uma robusta biblioteca padrão (`library/*.pl`), grande parte derivada de implementações consolidadas como SWI-Prolog e Scryer Prolog, focando em compatibilidade ISO e estruturas de dados avançadas.
+
+Abaixo está o mapeamento arquitetônico dessas bibliotecas agrupadas por domínio:
+
+### 7.1 Estruturas de Dados e Algoritmos
+- **`lists.pl`**: Operações essenciais sobre listas (member, select, append, reverse, maplist, foldl). Otimizada para evitar stack overflows.
+- **`assoc.pl` & `rbtrees.pl`**: Implementações de Dicionários / Árvores balanceadas (Red-Black trees) para buscas em tempo $O(\log N)$.
+- **`ordsets.pl`**: Operações eficientes de conjuntos (união, interseção) usando listas ordenadas.
+- **`pairs.pl`**: Manipulação de pares Chave-Valor (termos `Key-Value`), integrando perfeitamente com maplist e ordenação.
+- **`heaps.pl`**: Filas de prioridade (min-heaps) úteis para algoritmos de roteamento como A* ou Dijkstra.
+- **`ugraphs.pl`**: Representação de Grafos Não-direcionados, oferecendo fechamento transitivo e ordenação topológica.
+
+### 7.2 Programação Lógica Avançada (Constraints e Reificação)
+O Trealla brilha em sua implementação de lógicas avançadas que limitam o espaço de busca (backtracking):
+- **`clpz.pl`**: CLP(Z) - *Constraint Logic Programming over Integers*. Escrita por Markus Triska (Scryer), permite resolver equações matemáticas declarativamente, de trás para frente.
+- **`dif.pl` & `freeze.pl`**: *Coroutining* e restrições de desigualdade segura (`dif/2` garante que dois termos nunca se unifiquem).
+- **`atts.pl`**: Variáveis atribuídas. O mecanismo de baixo nível que permite anexar metadados a variáveis Prolog (a fundação para CLP(Z) e `dif/2`).
+- **`reif.pl`**: Lógica reificada (*Indexing dif/2*), essencial para evitar falhas silenciosas e escrever código Prolog reversível seguro.
+- **`when.pl`**: Permite adiar a execução de um predicado até que certas condições sobre variáveis sejam atendidas (ex: até que X seja instanciado).
+
+### 7.3 Entrada, Saída e Parsing (I/O & DCGs)
+- **`dcgs.pl` & `pio.pl`**: *Definite Clause Grammars* e Pure I/O. Permite escrever parsers extremamente expressivos que leem e escrevem arquivos sem causar efeitos colaterais de estado (I/O preguiçoso e transparente).
+- **`format.pl` & `charsio.pl`**: Predicados de formatação estilo printf (`format/2`) e conversão segura entre tipos primitivos e strings de caracteres.
+- **`abnf.pl` & `json.pl`**: Parsers prontos para gramáticas formais (ABNF) e manipulação estruturada de JSON (geralmente usado em chamadas web/API).
+
+### 7.4 Integração, Redes e Concorrência
+O Trealla inclui bindings em C que expõem APIs do Sistema Operacional para o Prolog:
+- **`concurrent.pl` & `threads.pl`**: Suporte a paralelismo real (`future/3`). Permite execução não bloqueante aproveitando CPUs multicore (depende de `USE_THREADS`).
+- **`http.pl` & `sockets.pl` & `curl.pl`**: Stack completa para comunicação web. Inclui a capacidade de abrir sockets TCP de baixo nível, lançar um servidor HTTP básico, e fazer requisições via libcurl (`http_get`, `http_post`).
+- **`sqlite3.pl`**: Integração nativa com bancos de dados SQLite, permitindo salvar o estado da aplicação de forma relacional.
+- **`linda.pl`**: Implementação do modelo de concorrência "Linda" (*tuple spaces*), para comunicação entre processos/threads via mensagens globais de quadro negro (blackboard).
+- **`raylib.pl`**: Demonstra a capacidade do Trealla (através de FFI ou C wrappers) de manipular janelas gráficas 2D/3D usando o motor Raylib.
+
+---
+
+## 8. Considerações Finais sobre a Arquitetura
+
+O **Trealla Prolog** não é apenas um interpretador; é um motor lógico minimalista que adota a filosofia de "microkernel". Ele mantém o núcleo C pequeno (focado na máquina virtual, Células, e Skip Lists) enquanto delega funcionalidades ricas (como dicionários e HTTP) para a sua biblioteca padrão Prolog (`library/*.pl`).
+
+Ao mesmo tempo, ao introduzir a **Camada Híbrida Lua**, o Trealla quebra a barreira computacional histórica do Prolog, permitindo que a mesma base de código acesse a velocidade de execução vetorial e o gerenciamento de memória em tempo real de um JIT compiler moderno. Esta fusão cria uma arquitetura robusta, capaz de atuar em microcontroladores, agentes autônomos e servidores web com concorrência real e estado seguro.
