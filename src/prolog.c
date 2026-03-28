@@ -535,6 +535,11 @@ static bool g_init(prolog *pl)
 {
 	bool error = false;
 
+#ifndef _WIN32
+	g_cpu_count = sysconf(_SC_NPROCESSORS_ONLN);
+	if (g_cpu_count < 1) g_cpu_count = 1;
+#endif
+
 	init_lock(&g_symtab_guard);
 	g_global_atoms = calloc(s_global_atoms_size, 1);
 	s_global_atoms_offset = 0;

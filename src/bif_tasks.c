@@ -138,7 +138,11 @@ static bool bif_wait_0(query *q)
 			if (task->spawned) {
 				spawn_cnt++;
 
-				if (spawn_cnt >= /*g_cpu_count*/64)
+				#if USE_LUA
+				if (spawn_cnt >= (g_cpu_count * 1024))
+#else
+				if (spawn_cnt >= g_cpu_count)
+#endif
 					break;
 			}
 
@@ -208,7 +212,11 @@ static bool bif_await_0(query *q)
 			if (task->spawned) {
 				spawn_cnt++;
 
-				if (spawn_cnt >= /*g_cpu_count*/64)
+				#if USE_LUA
+				if (spawn_cnt >= (g_cpu_count * 1024))
+#else
+				if (spawn_cnt >= g_cpu_count)
+#endif
 					break;
 			}
 

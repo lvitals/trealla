@@ -88,9 +88,21 @@ echo "Async & Multithread benchmark completed."
 echo
 
 # 12. Comparative Benchmark (Prolog vs Lua)
-echo "[12/12] Running Comparative Benchmark (Pure Prolog vs Trealla + Lua)..."
+echo "[12/14] Running Comparative Benchmark (Pure Prolog vs Trealla + Lua)..."
 $TPL_BIN -l comparative_bench.pl -g "run_comparative_bench, halt."
 echo "Comparative benchmark completed."
+echo
+
+# 13. Network Concurrency Benchmark
+echo "[13/14] Running Network Concurrency Benchmark (Threads vs Async)..."
+$TPL_BIN -l network_concurrency_bench.pl -g "run_concurrency_bench, halt."
+echo "Network concurrency benchmark completed."
+echo
+
+# 14. Memory Usage Benchmark
+echo "[14/14] Running Memory Usage Benchmark (Resource Efficiency)..."
+$TPL_BIN -l memory_bench.pl -g "run_benchmarks, halt."
+echo "Memory usage benchmark completed."
 echo
 
 echo "===================================================="
