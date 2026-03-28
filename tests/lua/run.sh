@@ -82,9 +82,15 @@ echo "Pure benchmark completed."
 echo
 
 # 11. Async & Multithread Benchmark
-echo "[11/11] Running Async & Multithread Benchmark (Trealla + Lua)..."
-$TPL_BIN -l async_multithread_bench.pl -g "run_all_benchmarks, halt."
+echo "[11/12] Running Async & Multithread Benchmark (Trealla + Lua)..."
+$TPL_BIN -l async_multithread_bench.pl -g "run_extreme_benchmarks, halt."
 echo "Async & Multithread benchmark completed."
+echo
+
+# 12. Comparative Benchmark (Prolog vs Lua)
+echo "[12/12] Running Comparative Benchmark (Pure Prolog vs Trealla + Lua)..."
+$TPL_BIN -l comparative_bench.pl -g "run_comparative_bench, halt."
+echo "Comparative benchmark completed."
 echo
 
 echo "===================================================="
