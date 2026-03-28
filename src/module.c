@@ -304,19 +304,12 @@ void make(module *m)
 	return NULL;
 }
 
-predicate *search_predicate(module *m, cell *c, bool *prebuilt)
+predicate *search_predicate(module *m, cell *c)
 {
-	if (prebuilt)
-		*prebuilt = false;
-
 	predicate *pr = find_predicate(m, c);
 
-	if (pr) {
-		if (pr->is_builtin && prebuilt)
-			*prebuilt = true;
-
+	if (pr)
 		return pr;
-	}
 
 	for (unsigned i = 0; i < m->idx_used; i++) {
 		module *tmp_m = m->used[i];
@@ -335,12 +328,8 @@ predicate *search_predicate(module *m, cell *c, bool *prebuilt)
 	if (m->pl->user_m) {
 		pr = find_predicate(m->pl->user_m, c);
 
-		if (pr) {
-			if (pr->is_builtin && prebuilt)
-				*prebuilt = true;
-
+		if (pr)
 			return pr;
-		}
 	}
 
 	return NULL;
@@ -1684,7 +1673,7 @@ static void process_cell(module *m, clause *cl, cell *c, predicate *parent, int 
 			return;
 	} else {
 		if (last_was_colon < 1)
-			c->match = search_predicate(m, c, NULL);
+			c->match = search_predicate(m, c);
 	}
 
 	if (!is_directive
