@@ -76,9 +76,15 @@ echo "Hybrid benchmark completed."
 echo
 
 # 10. Performance Pure Benchmark
-echo "[10/10] Running Comprehensive Pure Benchmark (Prolog Standard)..."
+echo "[10/11] Running Comprehensive Pure Benchmark (Prolog Standard)..."
 $TPL_BIN -l performance_pure.pl -g "run_pure_benchmark, halt."
 echo "Pure benchmark completed."
+echo
+
+# 11. Async & Multithread Benchmark
+echo "[11/11] Running Async & Multithread Benchmark (Trealla + Lua)..."
+$TPL_BIN -l async_multithread_bench.pl -g "run_all_benchmarks, halt."
+echo "Async & Multithread benchmark completed."
 echo
 
 echo "===================================================="
