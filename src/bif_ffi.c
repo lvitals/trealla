@@ -217,7 +217,7 @@ static void register_ffi(prolog *pl, const char *name, unsigned arity, void *fn,
 	int idx = 0;
 
 	while (is_iso_list(l) && (idx < MAX_FFI_ARGS)) {
-		cell *h = LIST_HEAD(l);
+		cell *h = GET_LIST_HEAD_PROLOG(l);
 		h = deref(q, h, l_ctx);
 
 		if (is_interned(h)) {
@@ -267,7 +267,7 @@ static void register_ffi(prolog *pl, const char *name, unsigned arity, void *fn,
 				arg_types[idx++] = FFI_TAG_C_CSTR;
 		}
 
-		l = LIST_TAIL(l);
+		l = GET_LIST_TAIL_PROLOG(l);
 		l = deref(q, l, l_ctx);
 		l_ctx = q->latest_ctx;
 	}
@@ -323,7 +323,7 @@ bool do_register_struct(module *m, query *q, void *handle, const char *symbol, c
 	int idx = 0;
 
 	while (is_iso_list(l) && (idx < MAX_FFI_ARGS)) {
-		cell *h = LIST_HEAD(l);
+		cell *h = GET_LIST_HEAD_PROLOG(l);
 		h = q ? deref(q, h, l_ctx) : h;
 
 		if (is_interned(h)) {
@@ -426,7 +426,7 @@ bool do_register_struct(module *m, query *q, void *handle, const char *symbol, c
 			return false;
 		}
 
-		l = LIST_TAIL(l);
+		l = GET_LIST_TAIL_PROLOG(l);
 		l = q ? deref(q, l, l_ctx) : l;
 		l_ctx = q ? q->latest_ctx : 0;
 	}
@@ -445,7 +445,7 @@ bool do_register_predicate(module *m, query *q, void *handle, const char *symbol
 	int idx = 0;
 
 	while (is_iso_list(l) && (idx < MAX_FFI_ARGS)) {
-		cell *h = LIST_HEAD(l);
+		cell *h = GET_LIST_HEAD_PROLOG(l);
 		h = q ? deref(q, h, l_ctx) : h;
 
 		if (is_interned(h)) {
@@ -543,7 +543,7 @@ bool do_register_predicate(module *m, query *q, void *handle, const char *symbol
 				arg_types[idx++] = FFI_TAG_STRUCT;
 		}
 
-		l = LIST_TAIL(l);
+		l = GET_LIST_TAIL_PROLOG(l);
 		l = q ? deref(q, l, l_ctx) : l;
 		l_ctx = q ? q->latest_ctx : 0;
 	}
@@ -1115,7 +1115,7 @@ static void handle_struct2(query *q, nested_elements *nested, unsigned *pdepth, 
 		size_t bytes_offset_start = bytes_offset;
 
 		while (is_iso_list(l)) {
-			cell *h = LIST_HEAD(l);
+			cell *h = GET_LIST_HEAD_PROLOG(l);
 			h = deref(q, h, l_ctx);
 			pl_ctx h_ctx = q->latest_ctx;
 
@@ -1123,7 +1123,7 @@ static void handle_struct2(query *q, nested_elements *nested, unsigned *pdepth, 
 				handle_struct2(q, nested, pdepth, cnt, bytes, &bytes_offset, h, h_ctx, arg_values, &pos);
 			}
 
-			l = LIST_TAIL(l);
+			l = GET_LIST_TAIL_PROLOG(l);
 			l = deref(q, l, l_ctx);
 			l_ctx = q->latest_ctx;
 			cnt++;
@@ -1308,10 +1308,10 @@ bool wrap_ffi_predicate(query *q, builtins *ptr)
 			LIST_HANDLER(l);
 
 			while (is_iso_list(l)) {
-				cell *h = LIST_HEAD(l);
+				cell *h = GET_LIST_HEAD_PROLOG(l);
 				h = deref(q, h, l_ctx);
 				name = C_STR(q, h);
-				l = LIST_TAIL(l);
+				l = GET_LIST_TAIL_PROLOG(l);
 				break;
 			}
 
@@ -1496,7 +1496,7 @@ bool wrap_ffi_predicate(query *q, builtins *ptr)
 			size_t bytes_offset_start = bytes_offset;
 
 			while (is_iso_list(l)) {
-				cell *h = LIST_HEAD(l);
+				cell *h = GET_LIST_HEAD_PROLOG(l);
 				h = deref(q, h, l_ctx);
 				pl_ctx h_ctx = q->latest_ctx;
 
@@ -1504,7 +1504,7 @@ bool wrap_ffi_predicate(query *q, builtins *ptr)
 					handle_struct2(q, nested, &pdepth, cnt, bytes, &bytes_offset, h, h_ctx, arg_values, &pos);
 				}
 
-				l = LIST_TAIL(l);
+				l = GET_LIST_TAIL_PROLOG(l);
 				l = deref(q, l, l_ctx);
 				l_ctx = q->latest_ctx;
 				cnt++;
@@ -1926,7 +1926,7 @@ static bool bif_sys_struct_to_pointer_2(query *q)
 	GET_FIRST_ARG(p1,list);
 	GET_NEXT_ARG(p2,var);
 	LIST_HANDLER(p1);
-	cell *c = LIST_HEAD(p1);
+	cell *c = GET_LIST_HEAD_PROLOG(p1);
 	const char *name = C_STR(q, c);
 	foreign_struct *sptr = NULL;
 
@@ -1935,13 +1935,13 @@ static bool bif_sys_struct_to_pointer_2(query *q)
 		return false;
 	}
 
-	p1 = LIST_TAIL(p1);
+	p1 = GET_LIST_TAIL_PROLOG(p1);
 	char tmpbuf[256];
 	char *dst = tmpbuf;
 	unsigned i = 0;
 
 	while (is_iso_list(p1)) {
-		cell *h = LIST_HEAD(p1);
+		cell *h = GET_LIST_HEAD_PROLOG(p1);
 		uint8_t type = sptr->types[i];
 		result rs;
 
@@ -2016,7 +2016,7 @@ static bool bif_sys_struct_to_pointer_2(query *q)
 		} else
 			printf("*** struct to ptr %u\n", i);
 
-		p1 = LIST_TAIL(p1);
+		p1 = GET_LIST_TAIL_PROLOG(p1);
 		i++;
 	}
 

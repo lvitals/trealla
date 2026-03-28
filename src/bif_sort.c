@@ -70,7 +70,7 @@ static cell *nodesort(query *q, cell *p1, pl_ctx p1_ctx, bool dedup, bool keysor
 	size_t idx = 0, vars = 0;
 
 	while (is_list(p1)) {
-		cell *h = LIST_HEAD(p1);
+		cell *h = GET_LIST_HEAD_PROLOG(p1);
 		h = deref(q, h, p1_ctx);
 		pl_ctx h_ctx = q->latest_ctx;
 		base[idx].c = h;
@@ -90,7 +90,7 @@ static cell *nodesort(query *q, cell *p1, pl_ctx p1_ctx, bool dedup, bool keysor
 			}
 		}
 
-		p1 = LIST_TAIL(p1);
+		p1 = GET_LIST_TAIL_PROLOG(p1);
 		p1 = deref(q, p1, p1_ctx);
 		p1_ctx = q->latest_ctx;
 		idx++;
@@ -241,10 +241,10 @@ static bool bif_iso_keysort_2(query *q)
 
 	if (is_iso_list(p2)) {
 		LIST_HANDLER(p2);
-		cell *tmp_h = LIST_HEAD(p2);
+		cell *tmp_h = GET_LIST_HEAD_PROLOG(p2);
 		tmp_h = deref(q, tmp_h, p2_ctx);
 		pl_ctx tmp_h_ctx = q->latest_ctx;
-		LIST_TAIL(p2);
+		GET_LIST_TAIL_PROLOG(p2);
 
 		if (!is_var(tmp_h) && (!is_compound(tmp_h) || strcmp(C_STR(q, tmp_h), "-")))
 			return throw_error(q, tmp_h, tmp_h_ctx, "type_error", "pair");
@@ -279,7 +279,7 @@ static cell *nodesort4(query *q, cell *p1, pl_ctx p1_ctx, bool dedup, bool ascen
 	size_t idx = 0, vars = 0;
 
 	while (is_list(p1)) {
-		cell *h = deref(q, LIST_HEAD(p1), p1_ctx);
+		cell *h = deref(q, GET_LIST_HEAD_PROLOG(p1), p1_ctx);
 		pl_ctx h_ctx = q->latest_ctx;
 		base[idx].c = h;
 		base[idx].c_ctx = h_ctx;
@@ -290,7 +290,7 @@ static cell *nodesort4(query *q, cell *p1, pl_ctx p1_ctx, bool dedup, bool ascen
 		if (is_compound(h))
 			vars++;
 
-		p1 = LIST_TAIL(p1);
+		p1 = GET_LIST_TAIL_PROLOG(p1);
 		p1 = deref(q, p1, p1_ctx);
 		p1_ctx = q->latest_ctx;
 		idx++;
@@ -380,10 +380,10 @@ static bool bif_sort_4(query *q)
 
 	if (is_iso_list(p4)) {
 		LIST_HANDLER(p4);
-		cell *tmp_h = LIST_HEAD(p4);
+		cell *tmp_h = GET_LIST_HEAD_PROLOG(p4);
 		tmp_h = deref(q, tmp_h, p4_ctx);
 		pl_ctx tmp_h_ctx = q->latest_ctx;
-		LIST_TAIL(p4);
+		GET_LIST_TAIL_PROLOG(p4);
 
 		if (!is_var(tmp_h) && (!is_compound(tmp_h) || strcmp(C_STR(q, tmp_h), "-")))
 			return throw_error(q, tmp_h, tmp_h_ctx, "type_error", "pair");

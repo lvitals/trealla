@@ -758,6 +758,7 @@ struct query_ {
 	bool access_private:1;
 	bool in_retractall:1;
 	bool in_retract:1;
+	int wait_fd;
 };
 
 struct parser_ {
@@ -865,7 +866,17 @@ typedef struct {
 	bool is_anon;
 } var_item;
 
+#if USE_LUA
+#include "kpoll.h"
+#include <lua.h>
+#endif
+
 struct prolog_ {
+#if USE_LUA
+	struct kpoll kpoll_ctx;
+	lua_State *lua_vm;
+	skiplist *fds;
+#endif
 	stream streams[MAX_STREAMS];
 	thread threads[MAX_THREADS];
 	module *modmap[MAX_MODULES];
@@ -1030,8 +1041,8 @@ inline static pl_idx dup_cells_by_ref(cell *dst, const cell *src, pl_ctx src_ctx
 }
 
 #define LIST_HANDLER(l) cell l##_h_tmp, l##_t_tmp
-#define LIST_HEAD(l) list_head(l, &l##_h_tmp)
-#define LIST_TAIL(l) list_tail(l, &l##_t_tmp)
+#define GET_LIST_HEAD_PROLOG(l) list_head(l, &l##_h_tmp)
+#define GET_LIST_TAIL_PROLOG(l) list_tail(l, &l##_t_tmp)
 
 cell *list_head(cell *l, cell *tmp);
 cell *list_tail(cell *l, cell *tmp);

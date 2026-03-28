@@ -639,6 +639,11 @@ static bool g_init(prolog *pl)
 	return error;
 }
 
+static void valfree(const void *key, const void *val, const void *p)
+{
+	free((void*)val);
+}
+
 void pl_destroy(prolog *pl)
 {
 	if (!pl) return;
@@ -696,7 +701,11 @@ void pl_destroy(prolog *pl)
 
 	if (!--g_tpl_count)
 		g_destroy();
-
+#if USE_LUA
+	if (pl->lua_vm) lua_close(pl->lua_vm);
+	kpoll_destroy(&pl->kpoll_ctx);
+	sl_destroy(pl->fds);
+#endif
 	free(pl);
 }
 
@@ -858,5 +867,12 @@ prolog *pl_create()
 
 	pl->user_m->filename = save_filename;
 	pl->user_m->prebuilt = false;
+
+#if USE_LUA
+	kpoll_init(&pl->kpoll_ctx);
+	init_lua_vm(pl);
+	pl->fds = sl_create(NULL, (void*)valfree, NULL);
+#endif
+
 	return pl;
 }

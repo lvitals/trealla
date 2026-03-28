@@ -773,7 +773,7 @@ static bool bif_abolish_2(query *q)
 	LIST_HANDLER(p2);
 
 	while (is_list(p2)) {
-		cell *h = LIST_HEAD(p2);
+		cell *h = GET_LIST_HEAD_PROLOG(p2);
 		cell *c = deref(q, h, p2_ctx);
 
 		if (is_var(c))
@@ -800,7 +800,7 @@ static bool bif_abolish_2(query *q)
 		} else
 			return throw_error(q, c, q->latest_ctx, "domain_error", "stream_option");
 
-		p2 = LIST_TAIL(p2);
+		p2 = GET_LIST_TAIL_PROLOG(p2);
 		p2 = deref(q, p2, p2_ctx);
 		p2_ctx = q->latest_ctx;
 

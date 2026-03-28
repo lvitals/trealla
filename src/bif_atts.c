@@ -82,7 +82,7 @@ static bool do_put_atts(query *q, cell *attr, pl_ctx attr_ctx, bool is_minus)
 		LIST_HANDLER(l);
 
 		while (is_iso_list(l)) {
-			cell *h = LIST_HEAD(l);
+			cell *h = GET_LIST_HEAD_PROLOG(l);
 			h = deref(q, h, l_ctx);
 			pl_ctx h_ctx = q->latest_ctx;
 			cell *h1 = deref(q, h+1, h_ctx);
@@ -97,7 +97,7 @@ static bool do_put_atts(query *q, cell *attr, pl_ctx attr_ctx, bool is_minus)
 					return false;
 			}
 
-			l = LIST_TAIL(l);
+			l = GET_LIST_TAIL_PROLOG(l);
 			l = deref(q, l, l_ctx);
 			l_ctx = q->latest_ctx;
 		}
@@ -126,14 +126,14 @@ static bool bif_put_atts_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_iso_list(p2)) {
-			cell *attr = LIST_HEAD(p2);
+			cell *attr = GET_LIST_HEAD_PROLOG(p2);
 			attr = deref(q, attr, p2_ctx);
 			pl_ctx attr_ctx = q->latest_ctx;
 
 			if (!do_put_atts(q, attr, attr_ctx, is_minus))
 				return false;
 
-			p2 = LIST_TAIL(p2);
+			p2 = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, p2, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -167,14 +167,14 @@ static bool bif_get_atts_2(query *q)
 		LIST_HANDLER(l);
 
 		while (is_iso_list(l)) {
-			cell *h = LIST_HEAD(l);
+			cell *h = GET_LIST_HEAD_PROLOG(l);
 			h = deref(q, h, l_ctx);
 			cell *h1 = deref(q, h+1, q->latest_ctx);
 
 			if (!is_nil(h1))
 				append_list(q, h1);
 
-			l = LIST_TAIL(l);
+			l = GET_LIST_TAIL_PROLOG(l);
 			l = deref(q, l, l_ctx);
 			l_ctx = q->latest_ctx;
 		}
@@ -202,7 +202,7 @@ static bool bif_get_atts_2(query *q)
 	LIST_HANDLER(l);
 
 	while (is_iso_list(l)) {
-		cell *h = LIST_HEAD(l);
+		cell *h = GET_LIST_HEAD_PROLOG(l);
 		h = deref(q, h, l_ctx);
 		pl_ctx h_ctx = q->latest_ctx;
 		cell *h1 = deref(q, h+1, h_ctx);
@@ -217,7 +217,7 @@ static bool bif_get_atts_2(query *q)
 			return unify(q, attr, p2_ctx, h1, h1_ctx);
 		}
 
-		l = LIST_TAIL(l);
+		l = GET_LIST_TAIL_PROLOG(l);
 		l = deref(q, l, l_ctx);
 		l_ctx = q->latest_ctx;
 	}
@@ -330,14 +330,14 @@ static bool bif_sys_attributed_var_1(query *q)
 	LIST_HANDLER(l);
 
 	while (is_iso_list(l)) {
-		cell *h = LIST_HEAD(l);
+		cell *h = GET_LIST_HEAD_PROLOG(l);
 		h = deref(q, h, l_ctx);
 		cell *h1 = deref(q, h+1, l_ctx);
 
 		if (!is_nil(h1))
 			append_list(q, h1);
 
-		l = LIST_TAIL(l);
+		l = GET_LIST_TAIL_PROLOG(l);
 		l = deref(q, l, l_ctx);
 		l_ctx = q->latest_ctx;
 	}

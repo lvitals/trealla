@@ -5,12 +5,10 @@
 #include <lua.h>
 
 // Helpers para integração no motor
-void init_lua_vm();
+void init_lua_vm(prolog *pl);
 cell *lua_to_prolog(lua_State *L, int index, query *q);
 void prolog_to_lua(lua_State *L, query *q, cell *c, pl_ctx c_ctx);
 bool call_lua_function(query *q, cell *c, pl_ctx c_ctx);
-
-extern lua_State *g_lua_vm;
 #else
 // Fallback para quando Lua não está habilitado
 inline static bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) { return false; }

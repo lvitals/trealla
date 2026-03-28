@@ -559,15 +559,15 @@ static int index_cmpkey_(const void *ptr1, const void *ptr2, const void *param, 
 			LIST_HANDLER(p2);
 
 			while (is_list(p1) && is_list(p2)) {
-				cell *h1 = LIST_HEAD(p1);
-				cell *h2 = LIST_HEAD(p2);
+				cell *h1 = GET_LIST_HEAD_PROLOG(p1);
+				cell *h2 = GET_LIST_HEAD_PROLOG(p2);
 				int ok = index_cmpkey_(h1, h2, param, l);
 
 				if (ok != 0)
 					return ok;
 
-				p1 = LIST_TAIL(p1);
-				p2 = LIST_TAIL(p2);
+				p1 = GET_LIST_TAIL_PROLOG(p1);
+				p2 = GET_LIST_TAIL_PROLOG(p2);
 			}
 
 			return index_cmpkey_(p1, p2, param, l);
@@ -1084,7 +1084,7 @@ bool do_use_module_2(module *curr_m, cell *c)
 	LIST_HANDLER(p2);
 
 	while (is_iso_list(p2)) {
-		cell *head = LIST_HEAD(p2);
+		cell *head = GET_LIST_HEAD_PROLOG(p2);
 
 		if (is_interned(head) && (head->arity == 2)
 			&& ((head->val_off == g_as_s) || (head->val_off == g_colon_s))) {
@@ -1123,7 +1123,7 @@ bool do_use_module_2(module *curr_m, cell *c)
 			}
 		}
 
-		p2 = LIST_TAIL(p2);
+		p2 = GET_LIST_TAIL_PROLOG(p2);
 	}
 
 	return true;
@@ -1158,13 +1158,13 @@ bool do_use_foreign_module(module *m, cell *p)
 	}
 
 	while (is_iso_list(p2)) {
-		cell *h = LIST_HEAD(p2);
+		cell *h = GET_LIST_HEAD_PROLOG(p2);
 		const char *symbol = C_STR(m, h);
 		cell *l = h + 1;
 		cell *r = l + l->num_cells;
 		const char *ret_type = C_STR(m, r);
 		do_register_predicate(m, NULL, handle, symbol, l, 0, ret_type);
-		p2 = LIST_TAIL(p2);
+		p2 = GET_LIST_TAIL_PROLOG(p2);
 	}
 
 	return true;

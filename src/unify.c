@@ -201,20 +201,20 @@ static int compare_internal(query *q, cell *p1, pl_ctx p1_ctx, cell *p2, pl_ctx 
 		LIST_HANDLER(p2);
 
 		while (is_list(p1) && is_list(p2)) {
-			cell *c1 = LIST_HEAD(p1);
+			cell *c1 = GET_LIST_HEAD_PROLOG(p1);
 			c1 = deref(q, c1, p1_ctx);
 			pl_ctx c1_ctx = q->latest_ctx;
-			cell *c2 = LIST_HEAD(p2);
+			cell *c2 = GET_LIST_HEAD_PROLOG(p2);
 			c2 = deref(q, c2, p2_ctx);
 			pl_ctx c2_ctx = q->latest_ctx;
 
 			int val = compare_internal(q, c1, c1_ctx, c2, c2_ctx, depth+1);
 			if (val) return val;
 
-			p1 = LIST_TAIL(p1);
+			p1 = GET_LIST_TAIL_PROLOG(p1);
 			p1 = deref(q, p1, p1_ctx);
 			p1_ctx = q->latest_ctx;
-			p2 = LIST_TAIL(p2);
+			p2 = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, p2, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -307,8 +307,8 @@ static bool unify_string_to_list(query *q, cell *p1, pl_ctx p1_ctx, cell *p2, pl
 	LIST_HANDLER(p2);
 
 	while (is_list(p1) && is_iso_list(p2)) {
-		cell *c1 = LIST_HEAD(p1);
-		cell *c2 = LIST_HEAD(p2);
+		cell *c1 = GET_LIST_HEAD_PROLOG(p1);
+		cell *c2 = GET_LIST_HEAD_PROLOG(p2);
 
 		pl_ctx c1_ctx = p1_ctx;
 		c2 = deref(q, c2, p2_ctx);
@@ -317,8 +317,8 @@ static bool unify_string_to_list(query *q, cell *p1, pl_ctx p1_ctx, cell *p2, pl
 		if (!unify_internal(q, c1, c1_ctx, c2, c2_ctx, 0))
 			return false;
 
-		c1 = LIST_TAIL(p1);
-		c2 = LIST_TAIL(p2);
+		c1 = GET_LIST_TAIL_PROLOG(p1);
+		c2 = GET_LIST_TAIL_PROLOG(p2);
 
 		p1 = c1;
 		p2 = deref(q, c2, p2_ctx);

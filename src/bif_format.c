@@ -771,7 +771,7 @@ bool do_format(query *q, cell *str, pl_ctx str_ctx, cell *p1, pl_ctx p1_ctx, cel
 			LIST_HANDLER(c2);
 
 			while (is_iso_list(c2)) {
-				cell *h = LIST_HEAD(c2);
+				cell *h = GET_LIST_HEAD_PROLOG(c2);
 				h = deref(q, h, c2_ctx);
 				pl_ctx h_ctx = q->latest_ctx;
 
@@ -780,7 +780,7 @@ bool do_format(query *q, cell *str, pl_ctx str_ctx, cell *p1, pl_ctx p1_ctx, cel
 					return true;
 				}
 
-				c2 = LIST_TAIL(c2);
+				c2 = GET_LIST_TAIL_PROLOG(c2);
 				c2 = deref(q, c2, c2_ctx);
 				c2_ctx = q->latest_ctx;
 			}

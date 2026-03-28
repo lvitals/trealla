@@ -348,7 +348,7 @@ static bool bif_iso_atom_chars_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 
 			if (!is_atom(head) && is_var(p1))
@@ -365,7 +365,7 @@ static bool bif_iso_atom_chars_2(query *q)
 					return throw_error(q, head, q->latest_ctx, "type_error", "character");
 			}
 
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -390,13 +390,13 @@ static bool bif_iso_atom_chars_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 
 			const char *src = C_STR(q, head);
 			SB_strcatn(pr, src, len_char_utf8(src));
 
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -460,7 +460,7 @@ static bool bif_iso_number_chars_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 
 			if (is_var(head))
@@ -480,7 +480,7 @@ static bool bif_iso_number_chars_2(query *q)
 					return throw_error(q, head, q->latest_ctx, "type_error", "character");
 			}
 
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 			cnt++;
@@ -504,7 +504,7 @@ static bool bif_iso_number_chars_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 			int ch = peek_char_utf8(C_STR(q, head));
 
@@ -512,7 +512,7 @@ static bool bif_iso_number_chars_2(query *q)
 				return throw_error(q, head, q->latest_ctx, "syntax_error", "illegal_character");
 
 			SB_putchar(pr, ch);
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -594,7 +594,7 @@ static bool bif_iso_atom_codes_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 
 			if (!is_integer(head) && is_var(p1))
@@ -603,7 +603,7 @@ static bool bif_iso_atom_codes_2(query *q)
 			if (!is_integer(head) && !is_var(head))
 				return throw_error(q, head, q->latest_ctx, "type_error", "integer");
 
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -620,7 +620,7 @@ static bool bif_iso_atom_codes_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 			pl_int val;
 
@@ -647,7 +647,7 @@ static bool bif_iso_atom_codes_2(query *q)
 				len = put_char_utf8(ch, val);
 
 			SB_strcatn(pr, ch, len);
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 
@@ -714,7 +714,7 @@ static bool bif_string_codes_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 
 			if (!is_integer(head) && is_var(p1))
@@ -723,7 +723,7 @@ static bool bif_string_codes_2(query *q)
 			if (!is_integer(head) && !is_var(head))
 				return throw_error(q, head, q->latest_ctx, "type_error", "integer");
 
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -740,7 +740,7 @@ static bool bif_string_codes_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 			pl_int val;
 
@@ -767,7 +767,7 @@ static bool bif_string_codes_2(query *q)
 				len = put_char_utf8(ch, val);
 
 			SB_strcatn(pr, ch, len);
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 
@@ -825,7 +825,7 @@ static bool bif_hex_bytes_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 
 			if (!is_integer(head) && is_var(p1))
@@ -834,7 +834,7 @@ static bool bif_hex_bytes_2(query *q)
 			if (!is_integer(head) && !is_var(head))
 				return throw_error(q, head, q->latest_ctx, "type_error", "integer");
 
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -851,7 +851,7 @@ static bool bif_hex_bytes_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 
 			pl_int val = get_smallint(head);
@@ -862,7 +862,7 @@ static bool bif_hex_bytes_2(query *q)
 			char ch[10];
 			snprintf(ch, sizeof(ch), "%02X", (unsigned)val);
 			SB_strcat(pr, ch);
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 
@@ -884,17 +884,17 @@ static bool bif_hex_bytes_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p1) && is_list(p2)) {
-			cell *h11 = LIST_HEAD(p1);
+			cell *h11 = GET_LIST_HEAD_PROLOG(p1);
 			h11 = deref(q, h11, p1_ctx);
 			pl_ctx h11_ctx = q->latest_ctx;
-			p1 = LIST_TAIL(p1);
+			p1 = GET_LIST_TAIL_PROLOG(p1);
 			p1 = deref(q, p1, p1_ctx);
 			p1_ctx = q->latest_ctx;
-			cell *h12 = LIST_HEAD(p1);
+			cell *h12 = GET_LIST_HEAD_PROLOG(p1);
 			h12 = deref(q, h12, p1_ctx);
 			pl_ctx h12_ctx = q->latest_ctx;
 
-			cell *h2 = LIST_HEAD(p2);
+			cell *h2 = GET_LIST_HEAD_PROLOG(p2);
 			h2 = deref(q, h2, p2_ctx);
 			unsigned n = get_smalluint(h2);
 
@@ -921,10 +921,10 @@ static bool bif_hex_bytes_2(query *q)
 			}
 
 			unshare_cell(&tmp);
-			p1 = LIST_TAIL(p1);
+			p1 = GET_LIST_TAIL_PROLOG(p1);
 			p1 = deref(q, p1, p1_ctx);
 			p1_ctx = q->latest_ctx;
-			p2 = LIST_TAIL(p2);
+			p2 = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, p2, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -934,7 +934,7 @@ static bool bif_hex_bytes_2(query *q)
 	CHECKED(init_tmp_heap(q));
 
 	while (is_list(p1)) {
-		cell *h = LIST_HEAD(p1);
+		cell *h = GET_LIST_HEAD_PROLOG(p1);
 		h = deref(q, h, p1_ctx);
 
 		if (!is_atom(h))
@@ -955,14 +955,14 @@ static bool bif_hex_bytes_2(query *q)
 
 		val <<= 4;
 
-		p1 = LIST_TAIL(p1);
+		p1 = GET_LIST_TAIL_PROLOG(p1);
 		p1 = deref(q, p1, p1_ctx);
 		p1_ctx = q->latest_ctx;
 
 		if (!is_list(p1))
 			return throw_error(q, p1, p1_ctx, "domain_error", "hex_encoding");
 
-		h = LIST_HEAD(p1);
+		h = GET_LIST_HEAD_PROLOG(p1);
 		h = deref(q, h, p1_ctx);
 
 		if (!is_atom(h))
@@ -983,7 +983,7 @@ static bool bif_hex_bytes_2(query *q)
 		cell tmp;
 		make_int(&tmp, (int)val);
 		append_list(q, &tmp);
-		p1 = LIST_TAIL(p1);
+		p1 = GET_LIST_TAIL_PROLOG(p1);
 		p1 = deref(q, p1, p1_ctx);
 		p1_ctx = q->latest_ctx;
 	}
@@ -1026,7 +1026,7 @@ static bool bif_iso_number_codes_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 
 			if (is_var(head))
@@ -1041,7 +1041,7 @@ static bool bif_iso_number_codes_2(query *q)
 			if (!is_integer(head) && !is_var(head))
 				return throw_error(q, head, q->latest_ctx, "type_error", "integer");
 
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 			cnt++;
@@ -1065,7 +1065,7 @@ static bool bif_iso_number_codes_2(query *q)
 		LIST_HANDLER(p2);
 
 		while (is_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 			head = deref(q, head, p2_ctx);
 			pl_int val;
 
@@ -1083,7 +1083,7 @@ static bool bif_iso_number_codes_2(query *q)
 			}
 
 			SB_putchar(pr, val);
-			cell *tail = LIST_TAIL(p2);
+			cell *tail = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, tail, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -1574,14 +1574,14 @@ static bool bif_iso_arg_3(query *q)
 
 	if (is_list(p2)) {
 		LIST_HANDLER(p2);
-		cell *c = LIST_HEAD(p2);
+		cell *c = GET_LIST_HEAD_PROLOG(p2);
 		c = deref(q, c, p2_ctx);
 		pl_ctx c_ctx = q->latest_ctx;
 
 		if (arg_nbr == 1)
 			return unify(q, c, c_ctx, p3, p3_ctx);
 
-		p2 = LIST_TAIL(p2);
+		p2 = GET_LIST_TAIL_PROLOG(p2);
 		p2 = deref(q, p2, p2_ctx);
 		p2_ctx = q->latest_ctx;
 		return unify(q, p2, p2_ctx, p3, p3_ctx);
@@ -1625,9 +1625,9 @@ static bool bif_iso_univ_2(query *q)
 		make_atom(&tmp, g_dot_s);
 		allocate_list(q, &tmp);
 		LIST_HANDLER(p1);
-		cell *h = LIST_HEAD(p1);
+		cell *h = GET_LIST_HEAD_PROLOG(p1);
 		append_list(q, h);
-		cell *t = LIST_TAIL(p1);
+		cell *t = GET_LIST_TAIL_PROLOG(p1);
 		append_list(q, t);
 		cell *l = end_list(q);
 		CHECKED(l);
@@ -1670,7 +1670,7 @@ static bool bif_iso_univ_2(query *q)
 		LIST_HANDLER(l);
 
 		while (is_list(l)) {
-			cell *h = LIST_HEAD(l);
+			cell *h = GET_LIST_HEAD_PROLOG(l);
 			h = deref(q, h, l_ctx);
 			pl_ctx h_ctx = q->latest_ctx;
 			cell *tmp = append_to_tmp(q, h, h_ctx);
@@ -1678,7 +1678,7 @@ static bool bif_iso_univ_2(query *q)
 			if (is_cstring(tmp) && is_string(save_p2))
 				convert_to_literal(q->st.m, tmp);
 
-			l = LIST_TAIL(l);
+			l = GET_LIST_TAIL_PROLOG(l);
 			l = deref(q, l, l_ctx);
 			l_ctx = q->latest_ctx;
 			arity++;
@@ -2470,7 +2470,7 @@ static bool bif_iso_set_prolog_flag_2(query *q)
 		LIST_HANDLER(l);
 
 		while (is_iso_list(l)) {
-			cell *h = LIST_HEAD(l);
+			cell *h = GET_LIST_HEAD_PROLOG(l);
 			h = deref(q, h, l_ctx);
 			pl_ctx h_ctx = q->latest_ctx;
 
@@ -2511,7 +2511,7 @@ static bool bif_iso_set_prolog_flag_2(query *q)
 			} else
 				return answer_write_options_error(q, h);
 
-			l = LIST_TAIL(l);
+			l = GET_LIST_TAIL_PROLOG(l);
 			l = deref(q, l, l_ctx);
 			l_ctx = q->latest_ctx;
 		}
@@ -2735,14 +2735,14 @@ static bool bif_iso_op_3(query *q)
 	LIST_HANDLER(p3);
 
 	while (is_list(p3)) {
-		cell *h = LIST_HEAD(p3);
+		cell *h = GET_LIST_HEAD_PROLOG(p3);
 		h = deref(q, h, p3_ctx);
 		bool ok = do_op(q, h, q->latest_ctx);
 
 		if (ok != true)
 			return ok;
 
-		p3 = LIST_TAIL(p3);
+		p3 = GET_LIST_TAIL_PROLOG(p3);
 		p3 = deref(q, p3, p3_ctx);
 		p3_ctx = q->latest_ctx;
 
@@ -3501,7 +3501,7 @@ static bool bif_load_text_2(query *q)
 	module *m = q->st.m;
 
 	while (is_iso_list(p2)) {
-		cell *h = LIST_HEAD(p2);
+		cell *h = GET_LIST_HEAD_PROLOG(p2);
 		cell *c = deref(q, h, p2_ctx);
 		pl_ctx c_ctx = q->latest_ctx;
 
@@ -3525,7 +3525,7 @@ static bool bif_load_text_2(query *q)
 		} else
 			return throw_error(q, c, q->latest_ctx, "domain_error", "option");
 
-		p2 = LIST_TAIL(p2);
+		p2 = GET_LIST_TAIL_PROLOG(p2);
 		p2 = deref(q, p2, p2_ctx);
 		p2_ctx = q->latest_ctx;
 	}
@@ -3609,7 +3609,7 @@ static bool bif_must_be_4(query *q)
 		LIST_HANDLER(l);
 
 		while (is_iso_list(l)) {
-			cell *h = LIST_HEAD(l);
+			cell *h = GET_LIST_HEAD_PROLOG(l);
 			h = deref(q, h, l_ctx);
 			pl_ctx h_ctx = q->latest_ctx;
 			src = C_STR(q, c);
@@ -3641,7 +3641,7 @@ static bool bif_must_be_4(query *q)
 			else if (!strcmp(src, "compound" ) && !is_structure(h))
 				return throw_error(q, h, h_ctx, "type_error", "compound");
 
-			l = LIST_TAIL(l);
+			l = GET_LIST_TAIL_PROLOG(l);
 			l = deref(q, l, l_ctx);
 			l_ctx = q->latest_ctx;
 		}
@@ -3750,14 +3750,14 @@ static bool do_must_be_2(query *q, cell *p2, pl_ctx p2_ctx, cell *p1, pl_ctx p1_
 		LIST_HANDLER(l);
 
 		while (is_iso_list(l)) {
-			cell *h = LIST_HEAD(l);
+			cell *h = GET_LIST_HEAD_PROLOG(l);
 			h = deref(q, h, l_ctx);
 			pl_ctx h_ctx = q->latest_ctx;
 
 			if (!do_must_be_2(q, c, c_ctx, h, h_ctx))
 				return false;
 
-			l = LIST_TAIL(l);
+			l = GET_LIST_TAIL_PROLOG(l);
 			l = deref(q, l, l_ctx);
 			l_ctx = q->latest_ctx;
 		}
@@ -3997,7 +3997,7 @@ static bool bif_crypto_data_hash_3(query *q)
 	LIST_HANDLER(p3);
 
 	while (is_list(p3)) {
-		cell *h = LIST_HEAD(p3);
+		cell *h = GET_LIST_HEAD_PROLOG(p3);
 		h = deref(q, h, p3_ctx);
 		pl_ctx h_ctx = q->latest_ctx;
 
@@ -4028,7 +4028,7 @@ static bool bif_crypto_data_hash_3(query *q)
 		} else
 			return throw_error(q, h, h_ctx, "domain_error", "hash_option");
 
-		p3 = LIST_TAIL(p3);
+		p3 = GET_LIST_TAIL_PROLOG(p3);
 		p3 = deref(q, p3, p3_ctx);
 		p3_ctx = q->latest_ctx;
 	}
@@ -4150,10 +4150,10 @@ static bool bif_base64_3(query *q)
 		SB(pr);
 
 		while (is_list(p2)) {
-			cell *h = LIST_HEAD(p2);
+			cell *h = GET_LIST_HEAD_PROLOG(p2);
 			h = deref(q, h, p2_ctx);
 			SB_sprintf(pr, "%s", C_STR(q, h));
-			p2 = LIST_TAIL(p2);
+			p2 = GET_LIST_TAIL_PROLOG(p2);
 			p2 = deref(q, p2, p2_ctx);
 			p2_ctx = q->latest_ctx;
 		}
@@ -4621,7 +4621,7 @@ static bool bif_atomic_list_concat_3(query *q)
 	SB(pr);
 
 	while (is_list(p1)) {
-		cell *h = LIST_HEAD(p1);
+		cell *h = GET_LIST_HEAD_PROLOG(p1);
 		h = deref(q, h, p1_ctx);
 
 		if (is_var(h)) {
@@ -4640,7 +4640,7 @@ static bool bif_atomic_list_concat_3(query *q)
 		SB_strcat(pr, dst);
 		free(dst);
 
-		p1 = LIST_TAIL(p1);
+		p1 = GET_LIST_TAIL_PROLOG(p1);
 		p1 = deref(q, p1, p1_ctx);
 		p1_ctx = q->latest_ctx;
 
@@ -5542,7 +5542,7 @@ static bool bif_sys_memberchk_3(query *q)
 	CHECKED(push_choice(q));
 
 	while (is_list(p2)) {
-		cell *h = LIST_HEAD(p2);
+		cell *h = GET_LIST_HEAD_PROLOG(p2);
 		h = deref(q, h, p2_ctx);
 		pl_ctx h_ctx = q->latest_ctx;
 
@@ -5555,7 +5555,7 @@ static bool bif_sys_memberchk_3(query *q)
 		if (!is_string(p2))
 			undo_me(q);
 
-		p2 = LIST_TAIL(p2);
+		p2 = GET_LIST_TAIL_PROLOG(p2);
 		p2 = deref(q, p2, p2_ctx);
 		p2_ctx = q->latest_ctx;
 	}

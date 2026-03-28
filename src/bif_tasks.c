@@ -10,12 +10,14 @@
 #include "parser.h"
 #include "prolog.h"
 #include "query.h"
+#include "kpoll.h"
 
 #ifdef _WIN32
 #include <windows.h>
 #define msleep Sleep
 #define localtime_r(p1,p2) localtime(p1)
 #else
+#ifndef USE_LUA
 static void msleep(int ms)
 {
 	struct timespec tv = {0};
@@ -23,6 +25,7 @@ static void msleep(int ms)
 	tv.tv_nsec = ((ms) % 1000) * 1000 * 1000;
 	nanosleep(&tv, &tv);
 }
+#endif
 #endif
 
 bool do_yield(query *q, int msecs)
@@ -127,6 +130,7 @@ static bool bif_wait_0(query *q)
 		query *task = q->tasks;
 		unsigned spawn_cnt = 0;
 		bool did_something = false;
+		uint64_t min_tmo = 0;
 
 		while (task) {
 			CHECK_INTERRUPT();
@@ -140,12 +144,26 @@ static bool bif_wait_0(query *q)
 
 			if (task->tmo_msecs && !task->error) {
 				if (now <= task->tmo_msecs) {
+					uint64_t tmo = task->tmo_msecs - now;
+					if (!min_tmo || tmo < min_tmo) min_tmo = tmo;
 					task = task->next;
 					continue;
 				}
 
 				task->tmo_msecs = 0;
 			}
+
+#if USE_LUA
+			if (task->wait_fd != -1 && !task->error) {
+				struct kpollfd *kfd = NULL;
+				if (sl_get(q->pl->fds, (void*)(ptrdiff_t)task->wait_fd, (const void**)&kfd)) {
+					if (!kfd->revents) {
+						task = task->next;
+						continue;
+					}
+				}
+			}
+#endif
 
 			if (!task->yielded || !task->st.instr || task->error) {
 				query *save = task;
@@ -159,8 +177,15 @@ static bool bif_wait_0(query *q)
 			did_something = true;
 		}
 
-		if (!did_something)
+		if (!did_something) {
+#if USE_LUA
+			int timeout = min_tmo > 1000 ? 1000 : (int)min_tmo;
+			if (min_tmo == 0) timeout = 1000; // Default sleep if no timeouts
+			kpoll_wait(&q->pl->kpoll_ctx, timeout);
+#else
 			msleep(1);
+#endif
+		}
 	}
 
 	q->end_wait = false;
@@ -171,10 +196,11 @@ static bool bif_await_0(query *q)
 {
 	while (q->tasks) {
 		CHECK_INTERRUPT();
-		pl_uint now = get_time_in_usec() / 1000;
+		uint64_t now = get_time_in_usec() / 1000;
 		query *task = q->tasks;
 		unsigned spawn_cnt = 0;
 		bool did_something = false;
+		uint64_t min_tmo = 0;
 
 		while (task) {
 			CHECK_INTERRUPT();
@@ -188,12 +214,26 @@ static bool bif_await_0(query *q)
 
 			if (task->tmo_msecs && !task->error) {
 				if (now <= task->tmo_msecs) {
+					uint64_t tmo = task->tmo_msecs - now;
+					if (!min_tmo || tmo < min_tmo) min_tmo = tmo;
 					task = task->next;
 					continue;
 				}
 
 				task->tmo_msecs = 0;
 			}
+
+#if USE_LUA
+			if (task->wait_fd != -1 && !task->error) {
+				struct kpollfd *kfd = NULL;
+				if (sl_get(q->pl->fds, (void*)(ptrdiff_t)task->wait_fd, (const void**)&kfd)) {
+					if (!kfd->revents) {
+						task = task->next;
+						continue;
+					}
+				}
+			}
+#endif
 
 			if (!task->yielded || !task->st.instr || task->error) {
 				query *save = task;
@@ -210,9 +250,15 @@ static bool bif_await_0(query *q)
 			}
 		}
 
-		if (!did_something)
+		if (!did_something) {
+#if USE_LUA
+			int timeout = min_tmo > 1000 ? 1000 : (int)min_tmo;
+			if (min_tmo == 0) timeout = 1000; // Default sleep if no timeouts
+			kpoll_wait(&q->pl->kpoll_ctx, timeout);
+#else
 			msleep(1);
-		else
+#endif
+		} else
 			break;
 	}
 
@@ -297,6 +343,80 @@ static bool bif_sys_set_future_1(query *q)
 	return true;
 }
 
+static bool bif_task_add_fd_2(query *q)
+{
+	GET_FIRST_ARG(p1,integer);
+	GET_NEXT_ARG(p2,integer);
+	int fd = (int)get_smallint(p1);
+	short events = (short)get_smallint(p2);
+
+#if USE_LUA
+	struct kpollfd *kfd = NULL;
+	if (sl_get(q->pl->fds, (void*)(ptrdiff_t)fd, (const void**)&kfd)) {
+
+		kpoll_ctl(&q->pl->kpoll_ctx, kfd, events);
+	} else {
+		kfd = calloc(1, sizeof(struct kpollfd));
+		kpoll_add(&q->pl->kpoll_ctx, kfd, fd);
+		kpoll_ctl(&q->pl->kpoll_ctx, kfd, events);
+		sl_set(q->pl->fds, (void*)(ptrdiff_t)fd, kfd);
+	}
+	return true;
+#else
+	return false;
+#endif
+}
+
+static bool bif_task_del_fd_1(query *q)
+{
+	GET_FIRST_ARG(p1,integer);
+	int fd = (int)get_smallint(p1);
+
+#if USE_LUA
+	struct kpollfd *kfd = NULL;
+	if (sl_get(q->pl->fds, (void*)(ptrdiff_t)fd, (const void**)&kfd)) {
+
+		kpoll_del(&q->pl->kpoll_ctx, kfd);
+		sl_del(q->pl->fds, (void*)(ptrdiff_t)fd);
+	}
+	return true;
+#else
+	return false;
+#endif
+}
+
+static bool bif_task_wait_fd_3(query *q)
+{
+	GET_FIRST_ARG(p1,integer);
+	GET_NEXT_ARG(p2,integer);
+	GET_NEXT_ARG(p3,any);
+	int fd = (int)get_smallint(p1);
+	short events = (short)get_smallint(p2);
+
+#if USE_LUA
+	struct kpollfd *kfd = NULL;
+	if (!sl_get(q->pl->fds, (void*)(ptrdiff_t)fd, (const void**)&kfd)) {
+		kfd = calloc(1, sizeof(struct kpollfd));
+		kpoll_add(&q->pl->kpoll_ctx, kfd, fd);
+		sl_set(q->pl->fds, (void*)(ptrdiff_t)fd, kfd);
+	}
+
+	if (kfd->revents & events) {
+		cell res;
+		make_int(&res, kfd->revents & events);
+		kfd->revents &= ~events;
+		q->wait_fd = -1;
+		return unify(q, p3, p3_ctx, &res, q->st.cur_ctx);
+	}
+
+	kpoll_ctl(&q->pl->kpoll_ctx, kfd, events);
+	q->wait_fd = fd;
+	return do_yield(q, 0);
+#else
+	return false;
+#endif
+}
+
 static bool bif_send_1(query *q)
 {
 	GET_FIRST_ARG(p1,nonvar);
@@ -351,6 +471,10 @@ builtins g_tasks_bifs[] =
 	{"fork", 0, bif_fork_0, NULL, false, false, BLAH},
 	{"send", 1, bif_send_1, "+term", false, false, BLAH},
 	{"recv", 1, bif_recv_1, "?term", false, false, BLAH},
+
+	{"task_add_fd", 2, bif_task_add_fd_2, "+integer,+integer", false, false, BLAH},
+	{"task_del_fd", 1, bif_task_del_fd_1, "+integer", false, false, BLAH},
+	{"task_wait_fd", 3, bif_task_wait_fd_3, "+integer,+integer,-integer", false, false, BLAH},
 
 	{"$cancel_future", 1, bif_sys_cancel_future_1, "+integer", false, false, BLAH},
 	{"$set_future", 1, bif_sys_set_future_1, "+integer", false, false, BLAH},

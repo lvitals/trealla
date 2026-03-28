@@ -24,7 +24,7 @@ static bool bif_map_create_2(query *q)
 	LIST_HANDLER(p4);
 
 	while (is_list(p4)) {
-		cell *h = LIST_HEAD(p4);
+		cell *h = GET_LIST_HEAD_PROLOG(p4);
 		cell *c = deref(q, h, p4_ctx);
 		pl_ctx c_ctx = q->latest_ctx;
 
@@ -56,7 +56,7 @@ static bool bif_map_create_2(query *q)
 			return throw_error(q, c, c_ctx, "domain_error", "stream_option");
 		}
 
-		p4 = LIST_TAIL(p4);
+		p4 = GET_LIST_TAIL_PROLOG(p4);
 		p4 = deref(q, p4, p4_ctx);
 		p4_ctx = q->latest_ctx;
 
@@ -336,7 +336,7 @@ static bool bif_engine_create_4(query *q)
 	LIST_HANDLER(p4);
 
 	while (is_list(p4)) {
-		cell *h = LIST_HEAD(p4);
+		cell *h = GET_LIST_HEAD_PROLOG(p4);
 		cell *c = deref(q, h, p4_ctx);
 		pl_ctx c_ctx = q->latest_ctx;
 
@@ -368,7 +368,7 @@ static bool bif_engine_create_4(query *q)
 			return throw_error(q, c, c_ctx, "domain_error", "stream_option");
 		}
 
-		p4 = LIST_TAIL(p4);
+		p4 = GET_LIST_TAIL_PROLOG(p4);
 		p4 = deref(q, p4, p4_ctx);
 		p4_ctx = q->latest_ctx;
 

@@ -415,7 +415,7 @@ static void consultall(parser *p, cell *l)
 	LIST_HANDLER(l);
 
 	while (is_list(l)) {
-		cell *h = LIST_HEAD(l);
+		cell *h = GET_LIST_HEAD_PROLOG(l);
 
 		if (is_iso_list(h))
 			consultall(p, h);
@@ -426,7 +426,7 @@ static void consultall(parser *p, cell *l)
 				fprintf(stderr, "Error: file not found: '%s'\n", s);
 		}
 
-		l = LIST_TAIL(l);
+		l = GET_LIST_TAIL_PROLOG(l);
 	}
 }
 
@@ -494,7 +494,7 @@ static void do_op(parser *p, cell *c, bool make_public)
 	LIST_HANDLER(p3);
 
 	while (is_list(p3)) {
-		cell *h = LIST_HEAD(p3);
+		cell *h = GET_LIST_HEAD_PROLOG(p3);
 
 		if (is_atom(h)) {
 			char *name = DUP_STRING(p, h);
@@ -539,7 +539,7 @@ static void do_op(parser *p, cell *c, bool make_public)
 			free(name);
 		}
 
-		p3 = LIST_TAIL(p3);
+		p3 = GET_LIST_TAIL_PROLOG(p3);
 	}
 
 	if (is_atom(p3) && !is_nil(p3)) {
@@ -728,7 +728,7 @@ static bool directives(parser *p, cell *d)
 		bool iso = false;
 
 		while (is_iso_list(p2)) {
-			cell *h = LIST_HEAD(p2);
+			cell *h = GET_LIST_HEAD_PROLOG(p2);
 
 			if (is_compound(h) && is_atom(h+1) && !strcmp(C_STR(p, h), "iso")) {
 				cell *arg = h + 1;
@@ -747,7 +747,7 @@ static bool directives(parser *p, cell *d)
 				desc = DUP_STRING(p, arg);
 			}
 
-			p2 = LIST_TAIL(p2);
+			p2 = GET_LIST_TAIL_PROLOG(p2);
 		}
 
 		pl_ctx p1_ctx = 0;
@@ -879,8 +879,8 @@ static bool directives(parser *p, cell *d)
 		LIST_HANDLER(p2);
 
 		while (is_iso_list(p2)) {
-			LIST_HEAD(p2);
-			p2 = LIST_TAIL(p2);
+			GET_LIST_HEAD_PROLOG(p2);
+			p2 = GET_LIST_TAIL_PROLOG(p2);
 		}
 
 		return true;
@@ -980,7 +980,7 @@ static bool directives(parser *p, cell *d)
 		LIST_HANDLER(p2);
 
 		while (is_iso_list(p2)) {
-			cell *head = LIST_HEAD(p2);
+			cell *head = GET_LIST_HEAD_PROLOG(p2);
 
 			if (is_compound(head)) {
 				if (!strcmp(C_STR(p, head), "/")
@@ -1019,7 +1019,7 @@ static bool directives(parser *p, cell *d)
 				}
 			}
 
-			p2 = LIST_TAIL(p2);
+			p2 = GET_LIST_TAIL_PROLOG(p2);
 		}
 
 		return true;
@@ -1119,7 +1119,7 @@ static bool directives(parser *p, cell *d)
 		LIST_HANDLER(p1);
 
 		while (is_list(p1)) {
-			cell *h = LIST_HEAD(p1);
+			cell *h = GET_LIST_HEAD_PROLOG(p1);
 
 			if (is_interned(h) && (!strcmp(C_STR(p, h), "/") || !strcmp(C_STR(p, h), "//")) && (h->arity == 2)) {
 				cell *c_name = h + 1;
@@ -1209,7 +1209,7 @@ static bool directives(parser *p, cell *d)
 				}
 			}
 
-			p1 = LIST_TAIL(p1);
+			p1 = GET_LIST_TAIL_PROLOG(p1);
 		}
 	}
 
@@ -3767,7 +3767,7 @@ unsigned tokenize(parser *p, bool is_arg_processing, bool is_consing)
 					bool tail = false;
 
 					while (is_iso_list(p1)) {
-						cell *h = LIST_HEAD(p1);
+						cell *h = GET_LIST_HEAD_PROLOG(p1);
 
 						if (!process_term(p, h))
 							return 0;
@@ -3775,7 +3775,7 @@ unsigned tokenize(parser *p, bool is_arg_processing, bool is_consing)
 						if (p->already_loaded_error)
 							return 0;
 
-						p1 = LIST_TAIL(p1);
+						p1 = GET_LIST_TAIL_PROLOG(p1);
 
 						if (is_nil(p1) || is_var(p1))
 							tail = true;

@@ -229,7 +229,7 @@ bool bif_parse_csv_line_3(query *q)
 	LIST_HANDLER(p3);
 
 	while (is_list(p3)) {
-		cell *h = LIST_HEAD(p3);
+		cell *h = GET_LIST_HEAD_PROLOG(p3);
 		h = deref(q,h,p3_ctx);
 
 		if (is_compound(h) && (h->arity == 1)) {
@@ -255,7 +255,7 @@ bool bif_parse_csv_line_3(query *q)
 				quote = peek_char_utf8(C_STR(q, c));
 		}
 
-		p3 = LIST_TAIL(p3);
+		p3 = GET_LIST_TAIL_PROLOG(p3);
 		p3 = deref(q,p3,p3_ctx);
 		p3_ctx = q->latest_ctx;
 	}
@@ -284,7 +284,7 @@ bool bif_parse_csv_file_2(query *q)
 		sep = '\t';
 
 	while (is_list(p3)) {
-		cell *h = LIST_HEAD(p3);
+		cell *h = GET_LIST_HEAD_PROLOG(p3);
 		h = deref(q,h,p3_ctx);
 
 		if (is_compound(h) && (h->arity == 1)) {
@@ -314,7 +314,7 @@ bool bif_parse_csv_file_2(query *q)
 				quote = peek_char_utf8(C_STR(q, c));
 		}
 
-		p3 = LIST_TAIL(p3);
+		p3 = GET_LIST_TAIL_PROLOG(p3);
 		p3 = deref(q,p3,p3_ctx);
 		p3_ctx = q->latest_ctx;
 	}
@@ -374,7 +374,7 @@ static bool do_write_csv_line(query *q, parser* p, csv *params, cell *l, pl_ctx 
 	LIST_HANDLER(l);
 
 	while (is_list(l)) {
-		cell *h = LIST_HEAD(l);
+		cell *h = GET_LIST_HEAD_PROLOG(l);
 		h = deref(q,h,l_ctx);
 		pl_ctx h_ctx = q->latest_ctx;
 
@@ -388,7 +388,7 @@ static bool do_write_csv_line(query *q, parser* p, csv *params, cell *l, pl_ctx 
 
 		free(dst);
 
-		l = LIST_TAIL(l);
+		l = GET_LIST_TAIL_PROLOG(l);
 		l = deref(q,l,l_ctx);
 		l_ctx = q->latest_ctx;
 
@@ -418,7 +418,7 @@ bool bif_write_csv_file_3(query *q)
 		sep = '\t';
 
 	while (is_list(p3)) {
-		cell *h = LIST_HEAD(p3);
+		cell *h = GET_LIST_HEAD_PROLOG(p3);
 		h = deref(q,h,p3_ctx);
 
 		if (is_compound(h) && (h->arity == 1)) {
@@ -450,7 +450,7 @@ bool bif_write_csv_file_3(query *q)
 				quote = peek_char_utf8(C_STR(q, c));
 		}
 
-		p3 = LIST_TAIL(p3);
+		p3 = GET_LIST_TAIL_PROLOG(p3);
 		p3 = deref(q,p3,p3_ctx);
 		p3_ctx = q->latest_ctx;
 	}
@@ -462,7 +462,7 @@ bool bif_write_csv_file_3(query *q)
 	LIST_HANDLER(p2);
 
 	while (is_list(p2)) {
-		cell *h = LIST_HEAD(p2);
+		cell *h = GET_LIST_HEAD_PROLOG(p2);
 		h = deref(q,h,p2_ctx);
 		pl_ctx h_ctx = q->latest_ctx;
 
@@ -475,7 +475,7 @@ bool bif_write_csv_file_3(query *q)
 			return false;
 		}
 
-		p2 = LIST_TAIL(p2);
+		p2 = GET_LIST_TAIL_PROLOG(p2);
 		p2 = deref(q,p2,p2_ctx);
 		p2_ctx = q->latest_ctx;
 	}

@@ -591,7 +591,7 @@ static bool bif_pl_thread_3(query *q)
 	LIST_HANDLER(p3);
 
 	while (is_list(p3)) {
-		cell *h = LIST_HEAD(p3);
+		cell *h = GET_LIST_HEAD_PROLOG(p3);
 		cell *c = deref(q, h, p3_ctx);
 		pl_ctx c_ctx = q->latest_ctx;
 
@@ -623,7 +623,7 @@ static bool bif_pl_thread_3(query *q)
 			return throw_error(q, c, c_ctx, "domain_error", "stream_option");
 		}
 
-		p3 = LIST_TAIL(p3);
+		p3 = GET_LIST_TAIL_PROLOG(p3);
 		p3 = deref(q, p3, p3_ctx);
 		p3_ctx = q->latest_ctx;
 
@@ -724,7 +724,7 @@ static bool bif_thread_create_3(query *q)
 	LIST_HANDLER(p3);
 
 	while (is_list(p3)) {
-		cell *h = LIST_HEAD(p3);
+		cell *h = GET_LIST_HEAD_PROLOG(p3);
 		cell *c = deref(q, h, p3_ctx);
 		pl_ctx c_ctx = q->latest_ctx;
 
@@ -793,7 +793,7 @@ static bool bif_thread_create_3(query *q)
 			return throw_error(q, c, c_ctx, "domain_error", "stream_option");
 		}
 
-		p3 = LIST_TAIL(p3);
+		p3 = GET_LIST_TAIL_PROLOG(p3);
 		p3 = deref(q, p3, p3_ctx);
 		p3_ctx = q->latest_ctx;
 
@@ -1403,7 +1403,7 @@ static bool bif_message_queue_create_2(query *q)
 	LIST_HANDLER(p2);
 
 	while (is_list(p2)) {
-		cell *h = LIST_HEAD(p2);
+		cell *h = GET_LIST_HEAD_PROLOG(p2);
 		cell *c = deref(q, h, p2_ctx);
 		pl_ctx c_ctx = q->latest_ctx;
 
@@ -1446,7 +1446,7 @@ static bool bif_message_queue_create_2(query *q)
 			return throw_error(q, c, c_ctx, "domain_error", "stream_option");
 		}
 
-		p2 = LIST_TAIL(p2);
+		p2 = GET_LIST_TAIL_PROLOG(p2);
 		p2 = deref(q, p2, p2_ctx);
 		p2_ctx = q->latest_ctx;
 
@@ -1738,7 +1738,7 @@ static bool bif_mutex_create_2(query *q)
 	LIST_HANDLER(p2);
 
 	while (is_list(p2)) {
-		cell *h = LIST_HEAD(p2);
+		cell *h = GET_LIST_HEAD_PROLOG(p2);
 		cell *c = deref(q, h, p2_ctx);
 		pl_ctx c_ctx = q->latest_ctx;
 
@@ -1781,7 +1781,7 @@ static bool bif_mutex_create_2(query *q)
 			return throw_error(q, c, c_ctx, "domain_error", "stream_option");
 		}
 
-		p2 = LIST_TAIL(p2);
+		p2 = GET_LIST_TAIL_PROLOG(p2);
 		p2 = deref(q, p2, p2_ctx);
 		p2_ctx = q->latest_ctx;
 

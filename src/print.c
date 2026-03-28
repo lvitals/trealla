@@ -47,9 +47,9 @@ cell *string_to_chars_list(query *q, cell *p)
 	init_tmp_heap(q);
 
 	while (is_list(p)) {
-		cell *h = LIST_HEAD(p);
+		cell *h = GET_LIST_HEAD_PROLOG(p);
 		append_list(q, h);
-		p = LIST_TAIL(p);
+		p = GET_LIST_TAIL_PROLOG(p);
 	}
 
 	return end_list(q);
@@ -61,7 +61,7 @@ char *chars_list_to_string(query *q, cell *p_chars, pl_ctx p_chars_ctx)
 	SB(pr);
 
 	while (is_list(p_chars)) {
-		cell *h = LIST_HEAD(p_chars);
+		cell *h = GET_LIST_HEAD_PROLOG(p_chars);
 		h = deref(q, h, p_chars_ctx);
 
 		if (is_integer(h)) {
@@ -73,7 +73,7 @@ char *chars_list_to_string(query *q, cell *p_chars, pl_ctx p_chars_ctx)
 			SB_putchar(pr, ch);
 		}
 
-		p_chars = LIST_TAIL(p_chars);
+		p_chars = GET_LIST_TAIL_PROLOG(p_chars);
 		p_chars = deref(q, p_chars, p_chars_ctx);
 		p_chars_ctx = q->latest_ctx;
 	}
@@ -506,7 +506,7 @@ static bool dump_variable(query *q, cell *c, pl_ctx c_ctx, bool running)
 	LIST_HANDLER(l);
 
 	while (is_iso_list(l)) {
-		cell *h = LIST_HEAD(l);
+		cell *h = GET_LIST_HEAD_PROLOG(l);
 		h = running ? deref(q, h, l_ctx) : h;
 		pl_ctx h_ctx = running ? q->latest_ctx : l_ctx;
 		cell *name = running ? deref(q, h+1, h_ctx) : h+1;
@@ -519,7 +519,7 @@ static bool dump_variable(query *q, cell *c, pl_ctx c_ctx, bool running)
 			return true;
 		}
 
-		l = LIST_TAIL(l);
+		l = GET_LIST_TAIL_PROLOG(l);
 		l = running ? deref(q, l, l_ctx) : l;
 		l_ctx = running ? q->latest_ctx : 0;
 	}
@@ -544,7 +544,7 @@ static void print_string_canonical(query *q, cell *c, pl_ctx c_ctx, int running,
 	SB_sprintf(q->sb, "%s", "'.'(");
 
 	while (is_list(c)) {
-		cell *h = LIST_HEAD(c);
+		cell *h = GET_LIST_HEAD_PROLOG(c);
 
 		if (is_number(h)) {
 			SB_sprintf(q->sb, "%d", (int)h->val_int);
@@ -555,7 +555,7 @@ static void print_string_canonical(query *q, cell *c, pl_ctx c_ctx, int running,
 		} else
 			SB_sprintf(q->sb, "%s", C_STR(q, h));
 
-		c = LIST_TAIL(c);
+		c = GET_LIST_TAIL_PROLOG(c);
 
 		if (!is_list(c)) {
 			SB_sprintf(q->sb, "%s", ",[]");
@@ -577,7 +577,7 @@ static void print_string_list(query *q, cell *c, pl_ctx c_ctx, int running, bool
 	if (!cons) { SB_sprintf(q->sb, "%s", "["); }
 
 	while (is_list(c)) {
-		cell *h = LIST_HEAD(c);
+		cell *h = GET_LIST_HEAD_PROLOG(c);
 
 		if (is_number(h)) {
 			SB_sprintf(q->sb, "%d", (int)h->val_int);
@@ -589,7 +589,7 @@ static void print_string_list(query *q, cell *c, pl_ctx c_ctx, int running, bool
 			SB_strcat_and_free(q->sb, formatted(C_STR(q, h), C_STRLEN(q, h), false, false));
 		}
 
-		c = LIST_TAIL(c);
+		c = GET_LIST_TAIL_PROLOG(c);
 
 		if (!is_list(c))
 			break;
@@ -1528,7 +1528,7 @@ static bool print_term_to_buf_(query *q, cell *c, pl_ctx c_ctx, int running, int
 				break;
 			}
 
-			cell *h = LIST_HEAD(l);
+			cell *h = GET_LIST_HEAD_PROLOG(l);
 			pl_ctx h_ctx = l_ctx;
 			slot *e = NULL;
 			uint32_t save_vgen = 0;
@@ -1550,7 +1550,7 @@ static bool print_term_to_buf_(query *q, cell *c, pl_ctx c_ctx, int running, int
 				SB_strcat_and_free(q->sb, formatted(C_STR(q, h), C_STRLEN(q, h), true, q->json));
 			}
 
-			l = LIST_TAIL(l);
+			l = GET_LIST_TAIL_PROLOG(l);
 			e = NULL;
 			both = 0;
 			any = false;

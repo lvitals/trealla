@@ -132,6 +132,7 @@ SRCOBJECTS = tpl.o \
 	src/compile.o \
 	src/heap.o \
 	src/history.o \
+	src/kpoll.o \
 	src/library.o \
 	src/list.o \
 	src/module.o \
