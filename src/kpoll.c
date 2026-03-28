@@ -1,6 +1,6 @@
 #include "kpoll.h"
 /* ==========================================================================
- * kpoll.c - Brew of Linux epoll, BSD kqueue, and Solaris Ports.
+ * kpoll.c - Brew of Linux epoll, BSD kqueue, Solaris Ports and fallback poll.
  * --------------------------------------------------------------------------
  * Copyright (c) 2012  William Ahern
  *
@@ -47,6 +47,16 @@
 #define HAVE_PORTS (__sun)
 #endif
 
+#if !HAVE_KQUEUE && !HAVE_EPOLL && !HAVE_PORTS
+#ifndef HAVE_POLL
+#define HAVE_POLL 1
+#endif
+#else
+#ifndef HAVE_POLL
+#define HAVE_POLL 0
+#endif
+#endif
+
 #if HAVE_EPOLL && __GLIBC_PREREQ(2, 9) && defined(_GNU_SOURCE)
 #ifndef HAVE_EPOLL_CREATE1
 #define HAVE_EPOLL_CREATE1 1
@@ -71,11 +81,9 @@
 #include <sys/epoll.h>	/* struct epoll_event epoll_create(2) epoll_ctl(2) epoll_wait(2) */
 #elif HAVE_PORTS
 #include <port.h>	/* PORT_SOURCE_FD port_associate(2) port_disassociate(2) port_getn(2) port_alert(2) */
-#else
+#elif HAVE_KQUEUE
 #include <sys/event.h>	/* EVFILT_READ EVFILT_WRITE EV_SET EV_ADD EV_DELETE struct kevent kqueue(2) kevent(2) */
 #endif
-
-#include <sys/queue.h>	/* LIST_ENTRY LIST_HEAD LIST_REMOVE LIST_INSERT_HEAD */
 
 #include <fcntl.h>	/* F_GETFL F_SETFL F_GETFD F_SETFD FD_CLOEXEC O_NONBLOCK O_CLOEXEC fcntl(2) */
 
@@ -140,11 +148,13 @@ static void closefd(int *fd) {
 typedef struct epoll_event event_t;
 #elif HAVE_PORTS
 typedef port_event_t event_t;
-#else
+#elif HAVE_KQUEUE
 /* NetBSD uses intptr_t while others use void * for .udata */
 #define EV_SETx(ev, a, b, c, d, e, f) EV_SET((ev), (a), (b), (c), (d), (e), ((__typeof__((ev)->udata))(f)))
 
 typedef struct kevent event_t;
+#else
+typedef struct pollfd event_t;
 #endif
 
 
@@ -153,8 +163,10 @@ static inline void *event_udata(const event_t *event) {
 	return event->data.ptr;
 #elif HAVE_PORTS
 	return event->portev_user;
-#else
+#elif HAVE_KQUEUE
 	return (void *)event->udata;
+#else
+	return NULL; /* Not used in poll fallback directly this way */
 #endif
 } /* event_udata() */
 
@@ -164,8 +176,10 @@ static inline short event_pending(const event_t *event) {
 	return event->events;
 #elif HAVE_PORTS
 	return event->portev_events;
-#else
+#elif HAVE_KQUEUE
 	return (event->filter == EVFILT_READ)? POLLIN : (event->filter == EVFILT_WRITE)? POLLOUT : 0;
+#else
+	return event->revents;
 #endif
 } /* event_pending() */
 
@@ -219,7 +233,7 @@ int kpoll_ctl(struct kpoll *kp, struct kpollfd *fd, short events) {
 	}
 
 	fd->events = events;
-#else
+#elif HAVE_KQUEUE
 	struct kevent event;
 
 	if (events & POLLIN) {
@@ -257,6 +271,8 @@ int kpoll_ctl(struct kpoll *kp, struct kpollfd *fd, short events) {
 
 		fd->events &= ~POLLOUT;
 	}
+#else
+	fd->events = events;
 #endif
 
 reset:
@@ -345,23 +361,9 @@ int kpoll_wait(struct kpoll *kp, int timeout) {
 
 	if (-1 == (n = epoll_wait(kp->fd, event, (int)countof(event), timeout)))
 		return (errno == EINTR)? 0 : errno;
-#elif HAVE_PORTS
-	uint_t i, n = 1;
-
-	if (0 != port_getn(kp->fd, event, countof(event), &n, ms2ts(timeout)))
-		return (errno == ETIME || errno == EINTR)? 0 : errno;
-#else
-	int i, n;
-
-	if (-1 == (n = kevent(kp->fd, NULL, 0, event, (int)countof(event), ms2ts(timeout))))
-		return (errno == EINTR)? 0 : errno;
-#endif
 
 	for (i = 0; i < n; i++) {
 		fd = event_udata(&event[i]);
-#if HAVE_PORTS
-		fd->events = 0;
-#endif
 
 		if (unlikely(fd == &kp->alert.event)) {
 			if ((error = kpoll_calm(kp)))
@@ -371,6 +373,72 @@ int kpoll_wait(struct kpoll *kp, int timeout) {
 			kpoll_move(kp, fd);
 		}
 	}
+#elif HAVE_PORTS
+	uint_t i, n = 1;
+
+	if (0 != port_getn(kp->fd, event, countof(event), &n, ms2ts(timeout)))
+		return (errno == ETIME || errno == EINTR)? 0 : errno;
+
+	for (i = 0; i < n; i++) {
+		fd = event_udata(&event[i]);
+		fd->events = 0;
+
+		if (unlikely(fd == &kp->alert.event)) {
+			if ((error = kpoll_calm(kp)))
+				return error;
+		} else {
+			fd->revents |= event_pending(&event[i]);
+			kpoll_move(kp, fd);
+		}
+	}
+#elif HAVE_KQUEUE
+	int i, n;
+
+	if (-1 == (n = kevent(kp->fd, NULL, 0, event, (int)countof(event), ms2ts(timeout))))
+		return (errno == EINTR)? 0 : errno;
+
+	for (i = 0; i < n; i++) {
+		fd = event_udata(&event[i]);
+
+		if (unlikely(fd == &kp->alert.event)) {
+			if ((error = kpoll_calm(kp)))
+				return error;
+		} else {
+			fd->revents |= event_pending(&event[i]);
+			kpoll_move(kp, fd);
+		}
+	}
+#else
+	struct pollfd pfd[KPOLL_MAXWAIT];
+	int i, n = 0;
+
+	LIST_FOREACH(fd, &kp->polling, le) {
+		if (n >= (int)countof(pfd)) break;
+		pfd[n].fd = fd->fd;
+		pfd[n].events = fd->events;
+		pfd[n].revents = 0;
+		n++;
+	}
+
+	if (-1 == (n = poll(pfd, n, timeout)))
+		return (errno == EINTR)? 0 : errno;
+
+	for (i = 0; i < n; i++) {
+		/* This is inefficient because we have to find the kpollfd from the fd */
+		LIST_FOREACH(fd, &kp->polling, le) {
+			if (fd->fd == pfd[i].fd) {
+				if (unlikely(fd == &kp->alert.event)) {
+					if ((error = kpoll_calm(kp)))
+						return error;
+				} else {
+					fd->revents |= pfd[i].revents;
+					kpoll_move(kp, fd);
+				}
+				break;
+			}
+		}
+	}
+#endif
 
 	return 0;
 } /* kpoll_wait() */
@@ -449,12 +517,14 @@ int kpoll_init(struct kpoll *kp) {
 		} else
 			goto syerr;
 	}
-#else
+#elif HAVE_KQUEUE
 	if (-1 == (kp->fd = kqueue()))
 		goto syerr;
+#else
+	kp->fd = -2; /* special value for poll fallback */
 #endif
 
-#if !HAVE_EPOLL_CREATE1
+#if !HAVE_EPOLL_CREATE1 && !HAVE_POLL
 	if ((error = setcloexec(kp->fd)))
 		goto error;
 #endif
