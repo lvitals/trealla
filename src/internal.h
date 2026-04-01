@@ -457,7 +457,6 @@ struct predicate_ {
 	bool is_dirty:1;
 };
 
-#define BLAH1 false, false, {0}, {0}, 0, NULL, NULL, NULL, NULL, NULL
 #define BLAH false, false, {0}, {0}, 0, NULL, NULL, NULL, NULL, NULL, NULL
 
 #define MAX_FFI_ARGS 64
@@ -543,8 +542,8 @@ struct run_state_ {
 	};
 
 	uint64_t timer_started;
-	pl_idx new_fp, hp, cp, tp, sp, heap_num, qnum;
-	pl_ctx cur_ctx;
+	pl_idx fp, hp, cp, tp, sp, heap_num, qnum;
+	pl_ctx curr_fp;
 };
 
 struct choice_ {

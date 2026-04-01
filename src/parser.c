@@ -209,7 +209,9 @@ cell *make_nil(void)
 		.val_off = 0
 	};
 
-	tmp.val_off = g_nil_s;
+	if (!tmp.val_off)
+		tmp.val_off = g_nil_s;
+
 	return &tmp;
 }
 
@@ -1612,37 +1614,42 @@ static void replace_double_bar(parser *p, pl_idx i, pl_idx last_idx)
 
 	// Build lhs into a list and append rhs + nil
 
-	char *src = C_STR(p, lhs);
-	query *q = query_create(p->m);
-	cell *l = string_to_chars_list(q, lhs);
-	unshare_cells(lhs, lhs->num_cells);
-	cell *tmp = calloc((l->num_cells-1)+rhs->num_cells+1, sizeof(cell));
-	cell *tmp2 = tmp;
-	tmp2 += copy_cells(tmp, l, l->num_cells-1);
-	tmp->num_cells -= 1;
-	tmp2 += dup_cells(tmp2, rhs, rhs->num_cells);
-	tmp->num_cells += rhs->num_cells;
-	*tmp2 = *make_nil();
-	tmp->num_cells += 1;
+	if (is_nil(lhs)) {
+		memmove(lhs, rhs, (p->cl->cidx-(rhs-p->cl->cells))*sizeof(cell));
+		p->cl->cidx -= 2;  // lhs + ||
+	} else {
+		char *src = C_STR(p, lhs);
+		query *q = query_create(p->m);
+		cell *l = string_to_chars_list(q, lhs);
+		unshare_cells(lhs, lhs->num_cells);
+		cell *tmp = calloc((l->num_cells-1)+rhs->num_cells+1, sizeof(cell));
+		cell *tmp2 = tmp;
+		tmp2 += copy_cells(tmp, l, l->num_cells-1);
+		tmp->num_cells -= 1;
+		tmp2 += dup_cells(tmp2, rhs, rhs->num_cells);
+		tmp->num_cells += rhs->num_cells;
+		*tmp2 = *make_nil();
+		tmp->num_cells += 1;
 
-	// Make room then copy
+		// Make room then copy
 
-	unsigned tot_cells = lhs->num_cells+c->num_cells+rhs->num_cells;
-	unsigned extra_cells = tmp->num_cells - tot_cells;
-	//printf("*** tot_cells = %u, extra_cells = %u\n", tot_cells, extra_cells);
+		unsigned tot_cells = lhs->num_cells+c->num_cells+rhs->num_cells;
+		unsigned extra_cells = tmp->num_cells - tot_cells;
+		//printf("*** tot_cells = %u, extra_cells = %u\n", tot_cells, extra_cells);
 
-	make_room(p, extra_cells);
-	c = p->cl->cells + i;
-	lhs = p->cl->cells + last_idx;
-	rhs = c + 1;
+		make_room(p, extra_cells);
+		c = p->cl->cells + i;
+		lhs = p->cl->cells + last_idx;
+		rhs = c + 1;
 
-	cell *end = rhs + rhs->num_cells;
-	memmove(end+extra_cells, end, (p->cl->cidx - (end - p->cl->cells))*sizeof(cell));
-	memmove(lhs, tmp, tmp->num_cells*sizeof(cell));
+		cell *end = rhs + rhs->num_cells;
+		memmove(end+extra_cells, end, (p->cl->cidx - (end - p->cl->cells))*sizeof(cell));
+		memmove(lhs, tmp, tmp->num_cells*sizeof(cell));
 
-	p->cl->cidx += extra_cells;
-	free(tmp);
-	query_destroy(q);
+		p->cl->cidx += extra_cells;
+		free(tmp);
+		query_destroy(q);
+	}
 }
 
 // Reduce a vector of cells in token order to a parse tree. This is
@@ -4112,7 +4119,7 @@ unsigned tokenize(parser *p, bool is_arg_processing, bool is_consing)
 
 			if (entered != '{') {
 				if (!p->do_read_term)
-					printf("Error: syntax error, mismatched parens/brackets/braces, %s:%d\n", get_loaded(p->m, p->m->filename), p->line_num);
+					fprintf(stderr, "Error: syntax error, mismatched parens/brackets/braces, %s:%d\n", get_loaded(p->m, p->m->filename), p->line_num);
 
 				p->error_desc = "mismatched_parens_or_brackets_or_braces";
 				p->error = true;

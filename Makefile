@@ -238,7 +238,7 @@ profile:
 	$(MAKE) 'OPT=$(OPT) -O0 -pg -DDEBUG'
 
 debug:
-	$(MAKE) 'OPT=$(OPT) -O0 -g3 -DDEBUG'
+	$(MAKE) 'OPT=$(OPT) -fsanitize=address -O0 -g3 -DDEBUG'
 
 release:
 	$(MAKE) 'OPT=$(OPT) -DNDEBUG'
@@ -280,12 +280,6 @@ compile: util/bin2c
 
 test:
 	./tests/run.sh
-
-check:
-	./tests/run_valgrind.sh
-
-leaks:
-	./tests/run_valgrind_leaks.sh
 
 clean:
 	rm -f tpl tpl.wasm \
