@@ -278,7 +278,7 @@ static bool bif_iso_char_code_2(query *q)
 		return throw_error(q, p2, p2_ctx, "representation_error", "character_code");
 
 	if (is_var(p1)) {
-		char tmpbuf[256];
+		char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 		int n = put_char_utf8(tmpbuf, get_smallint(p2));
 		cell tmp;
 		make_smalln(&tmp, tmpbuf, n);
@@ -543,7 +543,6 @@ static bool bif_iso_number_chars_2(query *q)
 		SB_free(pr);
 		cell *tmp = &p->v;
 		bool ok2 = unify(q, p1, p1_ctx, tmp, q->st.curr_fp);
-		unshare_cell(tmp);
 		return ok2;
 	}
 
@@ -637,7 +636,7 @@ static bool bif_iso_atom_codes_2(query *q)
 				return throw_error(q, head, q->latest_ctx, "representation_error", "character_code");
 			}
 
-			char ch[10];
+			char ch[MAX_BYTES_PER_CODEPOINT+1];
 			int len;
 
 			if (!val) {
@@ -757,7 +756,7 @@ static bool bif_string_codes_2(query *q)
 				return throw_error(q, head, q->latest_ctx, "representation_error", "character_code");
 			}
 
-			char ch[10];
+			char ch[MAX_BYTES_PER_CODEPOINT+1];
 			int len;
 
 			if (!val) {
@@ -902,7 +901,7 @@ static bool bif_hex_bytes_2(query *q)
 			int ch;
 			if (n1 < 10) ch = '0' + n1;
 			else { n1 -= 10; ch = 'a' + n1; }
-			char tmpbuf[10];
+			char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 			put_char_utf8(tmpbuf, ch);
 			cell tmp;
 			make_cstring(&tmp, tmpbuf);
@@ -1115,7 +1114,6 @@ static bool bif_iso_number_codes_2(query *q)
 		SB_free(pr);
 		cell tmp = p->v;
 		bool ok2 = unify(q, p1, p1_ctx, &tmp, q->st.curr_fp);
-		unshare_cell(&tmp);
 		return ok2;
 	}
 
@@ -1915,7 +1913,7 @@ static bool do_copy_term(query *q, bool copy_attrs)
 	return unify(q, p2x, p2x_ctx, tmp, q->st.curr_fp);
 }
 
-static bool bif_iso_duplicate_term_2(query *q)
+static bool bif_sys_duplicate_term_2(query *q)
 {
 	return do_copy_term(q, true);
 }
@@ -1939,7 +1937,10 @@ static bool bif_sys_clone_term_2(query *q)
 	if (is_atomic(p1) || is_atomic(p2))
 		return unify(q, p1, p1_ctx, p2, p2_ctx);
 
-	cell *tmp = clone_term_to_heap(q, p1, p1_ctx);
+	GET_FIRST_RAW_ARG(p1r,any);
+	GET_NEXT_RAW_ARG(p2r,any);
+
+	cell *tmp = clone_term_to_heap(q, p1r, p1r_ctx);
 	CHECKED(tmp);
 	return unify(q, p2, p2_ctx, tmp, q->st.curr_fp);
 }
@@ -4978,7 +4979,7 @@ static bool bif_char_type_2(query *q)
 	else if (!CMP_STRING_TO_CSTR(q, p2, "lower") && p2->arity) {
 		cell *arg21 = deref(q, p2+1, p2_ctx);
 		pl_ctx arg21_ctx = q->latest_ctx;
-		char tmpbuf[20];
+		char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 		put_char_utf8(tmpbuf, tolower(ch));
 		cell tmp;
 		make_string(&tmp, tmpbuf);
@@ -4988,7 +4989,7 @@ static bool bif_char_type_2(query *q)
 	} else if (!CMP_STRING_TO_CSTR(q, p2, "upper") && p2->arity) {
 		cell *arg21 = deref(q, p2+1, p2_ctx);
 		pl_ctx arg21_ctx = q->latest_ctx;
-		char tmpbuf[20];
+		char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 		put_char_utf8(tmpbuf, toupper(ch));
 		cell tmp;
 		make_string(&tmp, tmpbuf);
@@ -6263,7 +6264,6 @@ builtins g_iso_bifs[] =
 	{"number_codes", 2, bif_iso_number_codes_2, "?number,?list", true, false, BLAH},
 	{"arg", 3, bif_iso_arg_3, "+integer,+term,?term", true, false, BLAH},
 	{"functor", 3, bif_iso_functor_3, "?term,?atom,?integer", true, false, BLAH},
-	{"$duplicate_term", 2, bif_iso_duplicate_term_2, "+term,?term", true, false, BLAH},
 	{"copy_term", 2, bif_iso_copy_term_2, "+term,?term", true, false, BLAH},
 	{"copy_term_nat", 2, bif_iso_copy_term_nat_2, "+term,?term", false, false, BLAH},
 	{"term_variables", 2, bif_iso_term_variables_2, "+term,-list", true, false, BLAH},
@@ -6344,7 +6344,7 @@ builtins g_other_bifs[] =
 	{"crypto_n_random_bytes", 2, bif_crypto_n_random_bytes_2, "+integer,-codes", false, false, BLAH},
 	{"cyclic_term", 1, bif_cyclic_term_1, "+term", false, false, BLAH},
 	{"load_text", 2, bif_load_text_2, "+string,+list", false, false, BLAH},
-	{"between", 3, bif_between_3, "+integer,+integer,-integer", false, false, BLAH},
+	{"between", 3, bif_between_3, "+integer,+integer,?integer", false, false, BLAH},
 	{"numlist", 3, bif_numlist_3, "+integer,+integer,-list", false, false, BLAH},
 
 	{"must_be", 4, bif_must_be_4, "+term,+atom,+term,?any", false, false, BLAH},
@@ -6356,6 +6356,7 @@ builtins g_other_bifs[] =
 	{"crypto_data_hash", 3, bif_crypto_data_hash_3, "?string,?string,?list", false, false, BLAH},
 #endif
 
+	{"$duplicate_term", 2, bif_sys_duplicate_term_2, "+term,?term", true, false, BLAH},
 	{"$clone_term", 2, bif_sys_clone_term_2, "+term,?term", false, false, BLAH},
 	{"$module", 1, bif_sys_module_1, "?atom", false, false, BLAH},
 	{"$modules", 1, bif_sys_modules_1, "-list", false, false, BLAH},

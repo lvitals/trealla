@@ -1649,7 +1649,7 @@ static bool bif_iso_open_4(query *q)
 			fseek(str->fp, 0, SEEK_SET);
 	} else if (!strcmp(str->mode, "write") && !str->binary && use_bom) {
 		int ch = 0xFEFF;
-		char tmpbuf[10];
+		char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 		put_char_utf8(tmpbuf, ch);
 		net_write(tmpbuf, strlen(tmpbuf), str);
 		str->bom = true;
@@ -2494,8 +2494,8 @@ static bool bif_iso_write_1(query *q)
 	print_term_to_stream(q, str, p1, p1_ctx, 1);
 	q->numbervars = false;
 
-	if (isatty(fileno(str->fp)))
-		fflush(str->fp);
+	if (fflush(str->fp))
+		return throw_error(q, q->st.instr, q->st.curr_fp, "io_error", strerror(errno));
 
 	return !ferror(str->fp);
 }
@@ -2520,10 +2520,8 @@ static bool bif_iso_write_2(query *q)
 	print_term_to_stream(q, str, p1, p1_ctx, 1);
 	q->numbervars = false;
 
-	if (isatty(fileno(str->fp))) {
-		if (fflush(str->fp))
-			return false;
-	}
+	if (fflush(str->fp))
+		return throw_error(q, q->st.instr, q->st.curr_fp, "io_error", strerror(errno));
 
 	return !ferror(str->fp);
 }
@@ -2546,8 +2544,8 @@ static bool bif_iso_writeq_1(query *q)
 	q->numbervars = false;
 	q->quoted = 0;
 
-	if (isatty(fileno(str->fp)))
-		fflush(str->fp);
+	if (fflush(str->fp))
+		return throw_error(q, q->st.instr, q->st.curr_fp, "io_error", strerror(errno));
 
 	return !ferror(str->fp);
 }
@@ -2574,8 +2572,8 @@ static bool bif_iso_writeq_2(query *q)
 	q->numbervars = false;
 	q->quoted = 0;
 
-	if (isatty(fileno(str->fp)))
-		fflush(str->fp);
+	if (fflush(str->fp))
+		return throw_error(q, q->st.instr, q->st.curr_fp, "io_error", strerror(errno));
 
 	return !ferror(str->fp);
 }
@@ -2594,8 +2592,8 @@ static bool bif_iso_write_canonical_1(query *q)
 
 	print_canonical(q, str->fp, p1, p1_ctx, 1);
 
-	if (isatty(fileno(str->fp)))
-		fflush(str->fp);
+	if (fflush(str->fp))
+		return throw_error(q, q->st.instr, q->st.curr_fp, "io_error", strerror(errno));
 
 	return !ferror(str->fp);
 }
@@ -2618,8 +2616,8 @@ static bool bif_iso_write_canonical_2(query *q)
 
 	print_canonical(q, str->fp, p1, p1_ctx, 1);
 
-	if (isatty(fileno(str->fp)))
-		fflush(str->fp);
+	if (fflush(str->fp))
+		return throw_error(q, q->st.instr, q->st.curr_fp, "io_error", strerror(errno));
 
 	return !ferror(str->fp);
 }
@@ -2924,7 +2922,9 @@ static bool bif_iso_write_term_2(query *q)
 
 	if (q->nl) {
 		net_write("\n", 1, str);
-		//fflush(str->fp);
+
+		if (fflush(str->fp))
+			return throw_error(q, q->st.instr, q->st.curr_fp, "io_error", strerror(errno));
 	}
 
 	clear_write_options(q);
@@ -3010,7 +3010,9 @@ static bool bif_iso_write_term_3(query *q)
 
 	if (q->nl) {
 		net_write("\n", 1, str);
-		//fflush(str->fp);
+
+		if (fflush(str->fp))
+			return throw_error(q, q->st.instr, q->st.curr_fp, "io_error", strerror(errno));
 	}
 
 	clear_write_options(q);
@@ -3035,7 +3037,7 @@ static bool bif_iso_put_char_1(query *q)
 
 	const char *src = C_STR(q, p1);
 	int ch = get_char_utf8(&src);
-	char tmpbuf[80];
+	char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 	put_char_utf8(tmpbuf, ch);
 	net_write(tmpbuf, strlen(tmpbuf), str);
 	return !ferror(str->fp);
@@ -3063,7 +3065,7 @@ static bool bif_iso_put_char_2(query *q)
 
 	const char *src = C_STR(q, p1);
 	int ch = get_char_utf8(&src);
-	char tmpbuf[80];
+	char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 	put_char_utf8(tmpbuf, ch);
 	net_write(tmpbuf, strlen(tmpbuf), str);
 	return !ferror(str->fp);
@@ -3091,7 +3093,7 @@ static bool bif_iso_put_code_1(query *q)
 		return throw_error(q, p1, p1_ctx, "representation_error", "character_code");
 
 	int ch = (int)get_smallint(p1);
-	char tmpbuf[80];
+	char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 	put_char_utf8(tmpbuf, ch);
 	net_write(tmpbuf, strlen(tmpbuf), str);
 	return !ferror(str->fp);
@@ -3123,7 +3125,7 @@ static bool bif_iso_put_code_2(query *q)
 		return throw_error(q, p1, p1_ctx, "representation_error", "character_code");
 
 	int ch = (int)get_smallint(p1);
-	char tmpbuf[80];
+	char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 	put_char_utf8(tmpbuf, ch);
 	net_write(tmpbuf, strlen(tmpbuf), str);
 	return !ferror(str->fp);
@@ -3213,7 +3215,9 @@ static bool bif_iso_get_char_1(query *q)
 
 	if (isatty(fileno(str->fp)) && !str->did_getc && !str->ungetch) {
 		fprintf(str->fp, "%s", PROMPT);
-		fflush(str->fp);
+
+		if (fflush(str->fp))
+			return throw_error(q, q->st.instr, q->st.curr_fp, "io_error", strerror(errno));
 	}
 
 	int ch = str->ungetch ? str->ungetch : xgetc_utf8(net_getc, str);
@@ -3246,7 +3250,7 @@ static bool bif_iso_get_char_1(query *q)
 			str->p->line_num++;
 	}
 
-	char tmpbuf[80];
+	char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 	n = put_char_utf8(tmpbuf, ch);
 	cell tmp;
 	make_smalln(&tmp, tmpbuf, n);
@@ -3284,7 +3288,9 @@ static bool bif_iso_get_char_2(query *q)
 
 	if (isatty(fileno(str->fp)) && !str->did_getc && !str->ungetch) {
 		fprintf(str->fp, "%s", PROMPT);
-		fflush(str->fp);
+
+		if (fflush(str->fp))
+			return throw_error(q, q->st.instr, q->st.curr_fp, "io_error", strerror(errno));
 	}
 
 	int ch = str->ungetch ? str->ungetch : xgetc_utf8(net_getc, str);
@@ -3317,7 +3323,7 @@ static bool bif_iso_get_char_2(query *q)
 			str->p->line_num++;
 	}
 
-	char tmpbuf[80];
+	char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 	n = put_char_utf8(tmpbuf, ch);
 	cell tmp;
 	make_smalln(&tmp, tmpbuf, n);
@@ -3782,7 +3788,7 @@ static bool bif_iso_peek_char_1(query *q)
 	}
 
 	str->ungetch = ch;
-	char tmpbuf[80];
+	char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 	n = put_char_utf8(tmpbuf, ch);
 	cell tmp;
 	make_smalln(&tmp, tmpbuf, n);
@@ -3834,7 +3840,7 @@ static bool bif_iso_peek_char_2(query *q)
 	}
 
 	str->ungetch = ch;
-	char tmpbuf[80];
+	char tmpbuf[MAX_BYTES_PER_CODEPOINT+1];
 	n = put_char_utf8(tmpbuf, ch);
 	cell tmp;
 	make_smalln(&tmp, tmpbuf, n);
@@ -6105,6 +6111,21 @@ static bool bif_server_3(query *q)
 	if (is_var(p1)) {
 		port = 0;
 		filename = strdup(":0");
+	} else if (is_compound(p1) && (p1->arity == 2)) {
+		cell *p11 = deref(q, p1+1, p1_ctx);
+		cell *p12 = deref(q, p1+2, p1_ctx);
+		char tmpbuf[1024];
+
+		if (is_atom(p11) && is_smallint(p12))
+			snprintf(tmpbuf, sizeof(tmpbuf), "%s:%u", C_STR(q, p11), (unsigned)get_smalluint(p12));
+		else if (is_atom(p11) && is_var(p12)) {
+			p1 = deref(q, p12, p1_ctx);
+			p1_ctx = q->latest_ctx;
+			snprintf(tmpbuf, sizeof(tmpbuf), "%s:%u", C_STR(q, p11), port=0);
+		} else
+			return throw_error(q, p1, p1_ctx, "domain_error", "source_sink");
+
+		filename = strdup(tmpbuf);
 	} else if (is_atom(p1))
 		filename = DUP_STRING(q, p1);
 	else if (!is_iso_list(p1))

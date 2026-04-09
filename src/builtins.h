@@ -9,8 +9,6 @@
 #include "heap.h"
 #include "bif_lua.h"
 
-#define MAX_FFI 1000
-
 #if USE_FFI
 bool wrap_ffi_function(query *q, builtins *bif_ptr);
 bool wrap_ffi_predicate(query *q, builtins *bif_ptr);
