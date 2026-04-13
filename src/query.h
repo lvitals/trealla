@@ -92,6 +92,7 @@ bool do_post_unify_hook(query *q, bool is_builtin);
 bool any_attributed(query *q);
 bool do_load_file(query *q, cell *p1, pl_ctx p1_ctx);
 bool stream_close(query *q, int n);
+void leave_predicate(query *q, predicate *pr, bool is_final);
 
 #if USE_THREADS
 bool do_signal(query *q, void *thread_ptr);
@@ -215,7 +216,8 @@ inline static cell *get_body(cell *c)
 
 inline static void drop_choice(query *q)
 {
-	--q->cp;
+	if (q->cp)
+		--q->cp;
 }
 
 inline static pl_idx get_ordered_slot_num(const query *q, const frame *f, unsigned var_num)

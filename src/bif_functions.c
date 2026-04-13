@@ -2789,7 +2789,12 @@ static pl_flt rnd(query *q)
 
 	if (q->pl->rnd_first_time) {
 		q->pl->rnd_first_time = false;
-		q->pl->rnd_seed = clock();
+
+#if !defined(__wasi__)
+		q->pl->rnd_seed = clock() | getpid() << 8;
+#else
+		q->pl->rnd_seed = clock() << 8;
+#endif
 
 		for (int i = 0; i < 3; i++)
 			rnd(q);

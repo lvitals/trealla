@@ -1901,7 +1901,13 @@ static bool do_copy_term(query *q, bool copy_attrs)
 	if (is_atomic(p1) || is_atomic(p2))
 		return unify(q, p1, p1_ctx, p2, p2_ctx);
 
-	cell *tmp = copy_term_to_heap_with_replacement(q, p1, p1_ctx, copy_attrs, p1r, p1r_ctx, p2r, p2r_ctx);
+	cell *tmp;
+
+	if (is_var(p1r) && is_var(p2r))
+		tmp = copy_term_to_heap_with_replacement(q, p1, p1_ctx, copy_attrs, p1r, p1r_ctx, p2r, p2r_ctx);
+	else
+		tmp = copy_term_to_heap(q, p1, p1_ctx, copy_attrs);
+
 	q->dump_var_num = -1;
 	q->dump_var_ctx = -1;
 	CHECKED(tmp);
@@ -1928,7 +1934,6 @@ static bool bif_iso_copy_term_nat_2(query *q)
 	return do_copy_term(q, false);
 }
 
-
 static bool bif_sys_clone_term_2(query *q)
 {
 	GET_FIRST_ARG(p1,any);
@@ -1937,10 +1942,7 @@ static bool bif_sys_clone_term_2(query *q)
 	if (is_atomic(p1) || is_atomic(p2))
 		return unify(q, p1, p1_ctx, p2, p2_ctx);
 
-	GET_FIRST_RAW_ARG(p1r,any);
-	GET_NEXT_RAW_ARG(p2r,any);
-
-	cell *tmp = clone_term_to_heap(q, p1r, p1r_ctx);
+	cell *tmp = clone_term_to_heap(q, p1, p1_ctx);
 	CHECKED(tmp);
 	return unify(q, p2, p2_ctx, tmp, q->st.curr_fp);
 }
