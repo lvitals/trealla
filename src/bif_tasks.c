@@ -414,7 +414,7 @@ static bool bif_task_wait_fd_3(query *q)
 		make_int(&res, kfd->revents & events);
 		kfd->revents &= ~events;
 		q->wait_fd = -1;
-		return unify(q, p3, p3_ctx, &res, q->st.cur_ctx);
+		return unify(q, p3, p3_ctx, &res, q->st.curr_fp);
 	}
 
 	kpoll_ctl(&q->pl->kpoll_ctx, kfd, events);

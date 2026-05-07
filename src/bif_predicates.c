@@ -4596,7 +4596,7 @@ static bool bif_atomic_list_concat_3(query *q)
 				src += len;
 			}
 			cell *res = end_list(q);
-			return unify(q, p1, p1_ctx, res, q->st.cur_ctx);
+			return unify(q, p1, p1_ctx, res, q->st.curr_fp);
 		}
 
 		init_tmp_heap(q);
@@ -4614,7 +4614,7 @@ static bool bif_atomic_list_concat_3(query *q)
 		append_list(q, &tmp);
 		unshare_cell(&tmp);
 		cell *res = end_list(q);
-		return unify(q, p1, p1_ctx, res, q->st.cur_ctx);
+		return unify(q, p1, p1_ctx, res, q->st.curr_fp);
 	}
 
 	if (!is_list(p1) && !is_nil(p1))

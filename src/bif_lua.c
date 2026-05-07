@@ -302,7 +302,7 @@ bool bif_lua_call_3(query *q) {
     }
 
     cell *res = (nresults > 0) ? lua_to_prolog(coro, -1, q) : NULL;
-    bool ok = res ? unify(q, p3, p3_ctx, res, q->st.cur_ctx) : true;
+    bool ok = res ? unify(q, p3, p3_ctx, res, q->st.curr_fp) : true;
     return ok;
 }
 
@@ -362,7 +362,7 @@ bool bif_lua_get_2(query *q) {
     }
     
     cell *res = lua_to_prolog(q->pl->lua_vm, -1, q);
-    bool ok = unify(q, p2, p2_ctx, res, q->st.cur_ctx);
+    bool ok = unify(q, p2, p2_ctx, res, q->st.curr_fp);
     lua_settop(q->pl->lua_vm, top);
     return ok;
 }
@@ -384,7 +384,7 @@ bool bif_lua_yield_2(query *q) {
         lua_pushvalue(q->pl->lua_vm, -2);
         lua_setglobal(q->pl->lua_vm, "_CURRENT_KEY");
         cell *res = lua_to_prolog(q->pl->lua_vm, -1, q);
-        bool ok = unify(q, p2, p2_ctx, res, q->st.cur_ctx);
+        bool ok = unify(q, p2, p2_ctx, res, q->st.curr_fp);
         lua_pop(q->pl->lua_vm, 3);
         if (ok) return retry_choice(q);
     }
@@ -428,7 +428,7 @@ bool bif_lua_fib_2(query *q) {
     }
     cell res;
     make_int(&res, a);
-    return unify(q, p2, p2_ctx, &res, q->st.cur_ctx);
+    return unify(q, p2, p2_ctx, &res, q->st.curr_fp);
 }
 
 bool bif_lua_gcd_3(query *q) {
@@ -440,7 +440,7 @@ bool bif_lua_gcd_3(query *q) {
     while (b) { a %= b; long long t = a; a = b; b = t; }
     cell res;
     make_int(&res, a);
-    return unify(q, p3, p3_ctx, &res, q->st.cur_ctx);
+    return unify(q, p3, p3_ctx, &res, q->st.curr_fp);
 }
 
 bool bif_lua_is_prime_1(query *q) {
@@ -506,7 +506,7 @@ bool bif_lua_union_3(query *q) {
     
     cell *res = lua_to_prolog_list(q->pl->lua_vm, top + 2, q);
     lua_settop(q->pl->lua_vm, top);
-    return unify(q, p3, p3_ctx, res, q->st.cur_ctx);
+    return unify(q, p3, p3_ctx, res, q->st.curr_fp);
 }
 
 bool bif_lua_intersection_3(query *q) {
@@ -549,7 +549,7 @@ bool bif_lua_intersection_3(query *q) {
     
     cell *res = lua_to_prolog_list(q->pl->lua_vm, top + 2, q);
     lua_settop(q->pl->lua_vm, top);
-    return unify(q, p3, p3_ctx, res, q->st.cur_ctx);
+    return unify(q, p3, p3_ctx, res, q->st.curr_fp);
 }
 
 bool bif_lua_powerset_2(query *q) {
@@ -586,7 +586,7 @@ bool bif_lua_powerset_2(query *q) {
     lua_pop(q->pl->lua_vm, 1);
     cell *res = lua_to_prolog(q->pl->lua_vm, top + 1, q);
     lua_settop(q->pl->lua_vm, top);
-    return unify(q, p2, p2_ctx, res, q->st.cur_ctx);
+    return unify(q, p2, p2_ctx, res, q->st.curr_fp);
 }
 
 builtins g_lua_bifs[] = {

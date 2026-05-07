@@ -644,10 +644,12 @@ static bool g_init(prolog *pl)
 	return error;
 }
 
+#if USE_LUA
 static void valfree(const void *key, const void *val, const void *p)
 {
 	free((void*)val);
 }
+#endif
 
 void pl_destroy(prolog *pl)
 {
