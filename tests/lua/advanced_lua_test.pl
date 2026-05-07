@@ -9,8 +9,8 @@ setup_lua :-
 test_bidirectional :-
     write('Testing Lua -> Prolog Bidirectional conversion... '),
     lua_call(get_nested, [], Result),
-    % Result will be 'true' for complex tables for now due to heap safety
-    (Result == true -> write('OK (Table detected as true)'), nl ; (write('FAILED: '), write(Result), nl)).
+    % Result should be [1,[2,3],person(leandro,30)]
+    (Result == [1,[2,3],person(leandro,30)] -> write('OK'), nl ; (write('FAILED: '), write(Result), nl)).
 
 test_backing_store :-
     write('Testing Lua Backing Store (lua_set/lua_get)... '),

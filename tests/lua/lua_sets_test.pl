@@ -18,10 +18,9 @@ test_intersection :-
 test_powerset :-
     write('Testing Powerset (Set of all subsets)... '),
     powerset([a, b], Result),
-    % Result for [a, b] should be [[], [a], [b], [a, b]]
-    % Since our Lua->Prolog conversion for complex tables currently returns 'true',
-    % we verify that it succeeds.
-    (Result == true -> write('OK (Table returned as true)'), nl ; (write('FAILED: '), write(Result), nl)).
+    % Result for [a, b] should be [[],[a],[b],[a,b]]
+    (member([], Result), member([a], Result), member([b], Result), member([a, b], Result), length(Result, 4)
+    -> write('OK'), nl ; (write('FAILED: '), write(Result), nl)).
 
 test_math_utils :-
     write('Testing Math Utils (GCD & Prime)... '),

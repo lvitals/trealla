@@ -2,7 +2,6 @@
 % This suite pushes the boundaries of the async scheduler and multi-threaded isolation.
 
 :- use_module(library(lists)).
-:- use_module(library(statistics)).
 
 % --- SETUP LUA ---
 setup_lua :-
