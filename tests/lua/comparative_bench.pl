@@ -3,7 +3,7 @@
 
 :- use_module(library(lists)).
 
-% --- 1. MATH BENCHMARK (Fibonacci 35) ---
+% --- 1. MATH BENCHMARK (Fibonacci 32) ---
 
 fib_prolog(0, 0) :- !.
 fib_prolog(1, 1) :- !.
@@ -17,10 +17,10 @@ setup_lua_math :-
     lua_eval("function fib_lua(n) local a, b = 0, 1 for i = 1, n do a, b = b, a + b end return a end").
 
 bench_math :-
-    write('1. Math (Fibonacci 35)'), nl,
+    write('1. Math (Fibonacci 32)'), nl,
     % Prolog
     get_time_ms(P0),
-    fib_prolog(35, _),
+    fib_prolog(32, _),
     get_time_ms(P1),
     PTime is (P1 - P0) / 1000,
     format("   Pure Prolog:   ~3f sec~n", [PTime]),
@@ -28,7 +28,7 @@ bench_math :-
     % Lua
     setup_lua_math,
     get_time_ms(L0),
-    lua_call(fib_lua, [35], _),
+    lua_call(fib_lua, [32], _),
     get_time_ms(L1),
     LTimeRaw is L1 - L0,
     % Avoid division by zero

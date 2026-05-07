@@ -1,28 +1,29 @@
--- Acelerador Matemático Estável
-function sigmoide(x)
-    return 1 / (1 + math.exp(-x))
-end
+-- Stable Mathematical Accelerator
 
-function derivada_sigmoide(x)
-    local s = 1 / (1 + math.exp(-x))
-    return s * (1 - s)
-end
-
-function dot(l1, l2)
-    local s = 0
-    local n = #l1
-    for i = 1, n do
-        s = s + (l1[i] * l2[i])
+function update_weights(weights, inputs, gradient, lr)
+    local new_weights = {}
+    for i = 1, #weights do
+        new_weights[i] = weights[i] + (lr * gradient * inputs[i])
     end
-    return s
+    return new_weights
 end
 
--- Retorna a tabela diretamente para o lua_call
-function update_weights(w, x, g, lr)
-    local nw = {}
-    local n = #w
-    for i = 1, n do
-        nw[i] = w[i] + lr * g * x[i]
+function dot_product_layer(input, num_neurons)
+    local results = {}
+    for i = 1, num_neurons do
+        local sum = 0
+        for j = 1, #input do
+            sum = sum + (input[j] * 0.5)
+        end
+        results[i] = sum
     end
-    return nw
+    return results
+end
+
+function activate_layer(hidden)
+    local results = {}
+    for i = 1, #hidden do
+        results[i] = 1 / (1 + math.exp(-hidden[i]))
+    end
+    return results
 end

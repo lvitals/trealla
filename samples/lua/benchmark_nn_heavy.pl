@@ -4,14 +4,14 @@ mark_nn :-
     NEx = 20,
     LearningRate = 0.01,
 
-    writeln('=== BENCHMARK REDE NEURAL PESADA (BLACKBOARD) - TREALLA PROLOG ==='),
-    format('Épocas : ~w~n', [Epocas]),
-    format('Neurônios ocultos: ~w~n', [HSize]),
-    format('Exemplos/época : ~w~n', [NEx]),
-    format('Taxa aprendizado : ~w~n', [LearningRate]),
+    writeln('=== HEAVY NEURAL NETWORK BENCHMARK (BLACKBOARD) - TREALLA PROLOG ==='),
+    format('Epochs : ~w~n', [Epocas]),
+    format('Hidden neurons: ~w~n', [HSize]),
+    format('Examples/epoch : ~w~n', [NEx]),
+    format('Learning rate : ~w~n', [LearningRate]),
     nl,
 
-    % Inicialização no Blackboard
+    % Initialization in Blackboard
     gera_pesos_oculta_aleatorios(HSize, PO_inicial),
     gera_pesos_saida_aleatorios(HSize, PS_inicial),
     bb_put(pesos_oculta, PO_inicial),
@@ -20,17 +20,17 @@ mark_nn :-
     Entrada = [0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,0.9,0.8,0.7,0.6,0.5],
     SaidaDesejada = 1,
 
-    % Erro Inicial
+    % Initial Error
     feedforward_oculta(Entrada, PO_inicial, SO_i, _),
     feedforward_saida(SO_i, PS_inicial, SaidaInicial, _),
     ErroInicial is SaidaDesejada - SaidaInicial,
-    format('Saída inicial: ~f~n', [SaidaInicial]),
-    format('Erro inicial : ~f~n', [ErroInicial]), nl,
+    format('Initial output: ~f~n', [SaidaInicial]),
+    format('Initial error : ~f~n', [ErroInicial]), nl,
 
     get_time(T0),
     statistics(cputime, Cpu0),
 
-    writeln('Iniciando treinamento otimizado com Blackboard...'), nl,
+    writeln('Starting optimized training with Blackboard...'), nl,
 
     treinar_epocas_bb(Epocas, Entrada, SaidaDesejada, NEx, LearningRate, 1),
 
@@ -40,25 +40,25 @@ mark_nn :-
     Tempo is T1 - T0,
     Cpu is Cpu1 - Cpu0,
 
-    writeln('\n=== RESULTADOS DO BENCHMARK ==='),
-    format('Tempo total: ~f~n', [Tempo]),
+    writeln('\n=== BENCHMARK RESULTS ==='),
+    format('Total time: ~f~n', [Tempo]),
     format('CPU: ~f~n', [Cpu]),
 
     bb_get(pesos_oculta, PO_final),
     bb_get(pesos_saida, PS_final),
 
     length(PO_final, Num_neurons),
-    format('Neurônios ocultos: ~w~n', [Num_neurons]),
+    format('Hidden neurons: ~w~n', [Num_neurons]),
 
-    % Validação final
+    % Final validation
     feedforward_oculta(Entrada, PO_final, SO_final, _),
     feedforward_saida(SO_final, PS_final, SaidaFinal, _),
-    format('Saída após treino: ~f~n', [SaidaFinal]),
+    format('Output after training: ~f~n', [SaidaFinal]),
     ErroFinal is SaidaDesejada - SaidaFinal,
-    format('Erro final: ~f~n', [ErroFinal]).
+    format('Final error: ~f~n', [ErroFinal]).
 
 % =========================
-% TREINAMENTO (BLACKBOARD)
+% TRAINING (BLACKBOARD)
 % =========================
 
 treinar_epocas_bb(0, _, _, _, _, _) :- !.
@@ -69,7 +69,7 @@ treinar_epocas_bb(N, Entrada, SD, NEx, LR, Epoca) :-
     (Epoca mod 100 =:= 0 ->
         statistics(heap, Heap),
         MB is Heap / 1024 / 1024,
-        format('Epoca ~w - Heap: ~2f MB~n', [Epoca, MB])
+        format('Epoch ~w - Heap: ~2f MB~n', [Epoca, MB])
     ; true),
     Ep2 is Epoca + 1,
     !,
@@ -80,7 +80,7 @@ treinar_exemplos_bb(N, Entrada, SD, LR) :-
     N > 0,
     N1 is N - 1,
     
-    % Busca pesos do Blackboard
+    % Fetch weights from Blackboard
     bb_get(pesos_oculta, PO),
     bb_get(pesos_saida, PS),
 
@@ -94,7 +94,7 @@ treinar_exemplos_bb(N, Entrada, SD, LR) :-
     atualizar_pesos(PS, SO, PS_n, GradOut, LR),
     atualizar_oculta(PO, Somas, PS, GradOut, Entrada, LR, PO_n),
 
-    % Atualização mutável no Blackboard
+    % Mutable update in Blackboard
     bb_update(pesos_saida, _, PS_n),
     bb_update(pesos_oculta, _, PO_n),
     

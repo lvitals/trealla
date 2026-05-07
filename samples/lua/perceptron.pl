@@ -1,60 +1,60 @@
-% =============================================
-% Perceptron com Múltiplas Épocas - Trealla Prolog
-% =============================================
+% Perceptron with Multiple Epochs - Trealla Prolog
+% Simplified implementation for educational and benchmarking purposes.
 
-ativacao(Soma, 1) :- Soma >= 0, !.
-ativacao(_, 0).
+:- use_module(library(lists)).
 
-perceptron(Entradas, Pesos, Saida) :-
-    dot_product(Entradas, Pesos, Soma),
-    ativacao(Soma, Saida).
+% Activation function (Step function)
+activation(X, 1) :- X > 0, !.
+activation(_, 0).
 
-dot_product([], [], 0).
-dot_product([X|Xs], [W|Ws], Soma) :-
-    dot_product(Xs, Ws, SomaResto),
-    Soma is X*W + SomaResto.
+% Prediction (dot product + activation)
+predict([X1, X2], [W1, W2, B], Output) :-
+    Sum is (X1 * W1) + (X2 * W2) + B,
+    activation(Sum, Output).
 
-atualizar_pesos(Entradas, Pesos, SaidaDesejada, Taxa, NovosPesos) :-
-    perceptron(Entradas, Pesos, SaidaObtida),
-    Erro is SaidaDesejada - SaidaObtida,
-    atualizar_lista(Entradas, Pesos, Erro, Taxa, NovosPesos).
+% Weight update (W = W + LR * (Target - Output) * Input)
+update_weights(Target, Output, LR, [X1, X2], [W1, W2, B], [NW1, NW2, NB]) :-
+    Error is Target - Output,
+    NW1 is W1 + LR * Error * X1,
+    NW2 is W2 + LR * Error * X2,
+    NB is B + LR * Error.
 
-atualizar_lista([], [], _, _, []).
-atualizar_lista([X|Xs], [W|Ws], Erro, Taxa, [NovoW|NovosWs]) :-
-    NovoW is W + Taxa*Erro*X,
-    atualizar_lista(Xs, Ws, Erro, Taxa, NovosWs).
+% Dataset (AND Gate)
+dataset([0,0], 0).
+dataset([0,1], 0).
+dataset([1,0], 0).
+dataset([1,1], 1).
 
-% =============================================
-% Treinamento com várias épocas
-% =============================================
+% Training with multiple epochs
+train(Epocas, PesosFinais) :-
+    LR = 0.1,
+    PesosIniciais = [0.0, 0.0, 0.0],   % Starting from zero (better to see evolution)
+    epoch_loop(Epocas, PesosIniciais, LR, PesosFinais),
+    write('Final weights after '), write(Epocas), write(' epochs: '), writeln(PesosFinais),
+    test_all(PesosFinais).
 
-treinar :-
-    PesosIniciais = [0.0, 0.0, 0.0],   % Começando do zero (melhor para ver evolução)
-    Taxa = 0.2,
-    Epocas = 10,
-
-    treinar_epocas(Epocas, PesosIniciais, Taxa, PesosFinais),
-    write('Pesos finais após '), write(Epocas), write(' épocas: '), writeln(PesosFinais),
-    testar(PesosFinais).
-
-% Loop de épocas
-treinar_epocas(0, Pesos, _, Pesos).
-treinar_epocas(N, PesosAtual, Taxa, PesosFinais) :-
-    N > 0,
+% Epoch loop
+epoch_loop(0, W, _, W) :- !.
+epoch_loop(N, W, LR, FinalW) :-
+    one_epoch(W, LR, NW),
     N1 is N - 1,
-    treinar_uma_epoca(PesosAtual, Taxa, PesosNovo),
-    treinar_epocas(N1, PesosNovo, Taxa, PesosFinais).
+    epoch_loop(N1, NW, LR, FinalW).
 
-% Uma época completa (os 4 exemplos do AND)
-treinar_uma_epoca(Pesos, Taxa, PesosFinal) :-
-    atualizar_pesos([0,0,1], Pesos, 0, Taxa, P1),
-    atualizar_pesos([0,1,1], P1,     0, Taxa, P2),
-    atualizar_pesos([1,0,1], P2,     0, Taxa, P3),
-    atualizar_pesos([1,1,1], P3,     1, Taxa, PesosFinal).
+% One full epoch (the 4 AND examples)
+one_epoch(W0, LR, W_final) :-
+    dataset(In1, T1), predict(In1, W0, O1), update_weights(T1, O1, LR, In1, W0, W1),
+    dataset(In2, T2), predict(In2, W1, O2), update_weights(T2, O2, LR, In2, W1, W2),
+    dataset(In3, T3), predict(In3, W2, O3), update_weights(T3, O3, LR, In3, W2, W3),
+    dataset(In4, T4), predict(In4, W3, O4), update_weights(T4, O4, LR, In4, W3, W_final).
 
-testar(Pesos) :-
-    writeln('=== Testes AND ==='),
-    perceptron([0,0,1], Pesos, S1), write('0 AND 0 = '), writeln(S1),
-    perceptron([0,1,1], Pesos, S2), write('0 AND 1 = '), writeln(S2),
-    perceptron([1,0,1], Pesos, S3), write('1 AND 0 = '), writeln(S3),
-    perceptron([1,1,1], Pesos, S4), write('1 AND 1 = '), writeln(S4).
+% Testing
+test_all(W) :-
+    format('Testing results:~n', []),
+    test_one([0,0], W),
+    test_one([0,1], W),
+    test_one([1,0], W),
+    test_one([1,1], W).
+
+test_one(In, W) :-
+    predict(In, W, Out),
+    format('Input: ~w -> Output: ~w~n', [In, Out]).
