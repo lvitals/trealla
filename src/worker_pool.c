@@ -3,6 +3,10 @@
 #include "query.h"
 
 #if USE_THREADS && USE_LUA
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
+
 typedef struct {
 	prolog *pl;
 	unsigned id;
@@ -27,13 +31,16 @@ static void *worker_proc(void *arg)
 			task->worker_id = worker_id;
 			start(task);
 			
-			// Devolve a tarefa para o parent para que o bif_wait_0 possa processá-la
 			query *parent = task->parent;
 			if (parent) {
-				push_task(parent, task);
 				acquire_lock(&parent->tasks_lock);
 				parent->inflight--;
 				release_lock(&parent->tasks_lock);
+
+				if (task->yielded && task->st.instr && !task->error)
+					push_task(parent, task);
+				else
+					query_destroy(task);
 			} else {
 				query_destroy(task);
 			}
@@ -51,10 +58,14 @@ void init_worker_pool(prolog *pl)
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setstacksize(&attr, 512 * 1024); // 512KB stack
+
+#ifdef __GLIBC__
+	mallopt(M_ARENA_MAX, 1);
+#endif
 	
 	unsigned cnt = g_cpu_count;
-	if (cnt > 16)
-		cnt = 16;
+	if (cnt > 8)
+		cnt = 8;
 	if (cnt > MAX_THREADS - 1)
 		cnt = MAX_THREADS - 1;
 
