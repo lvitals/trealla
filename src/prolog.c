@@ -655,6 +655,10 @@ void pl_destroy(prolog *pl)
 {
 	if (!pl) return;
 
+#if USE_LUA && USE_THREADS
+	destroy_worker_pool(pl);
+#endif
+
 #if USE_THREADS
 	if (pl->q_cnt)
 		thread_cancel_all(pl);
@@ -709,9 +713,12 @@ void pl_destroy(prolog *pl)
 	if (!--g_tpl_count)
 		g_destroy();
 #if USE_LUA
-	if (pl->lua_vm) lua_close(pl->lua_vm);
+	for (unsigned i = 0; i < MAX_THREADS; i++) {
+		if (pl->lua_vms[i]) lua_close(pl->lua_vms[i]);
+	}
 	kpoll_destroy(&pl->kpoll_ctx);
 	sl_destroy(pl->fds);
+	free(pl->timer_heap);
 #endif
 	free(pl);
 }
@@ -877,7 +884,9 @@ prolog *pl_create()
 
 #if USE_LUA
 	kpoll_init(&pl->kpoll_ctx);
+	init_lock(&pl->timer_heap_lock);
 	init_lua_vm(pl);
+	init_worker_pool(pl);
 	pl->fds = sl_create(NULL, (void*)valfree, NULL);
 #endif
 

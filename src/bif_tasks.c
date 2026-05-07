@@ -17,15 +17,6 @@
 #define msleep Sleep
 #define localtime_r(p1,p2) localtime(p1)
 #else
-#ifndef USE_LUA
-static void msleep(int ms)
-{
-	struct timespec tv = {0};
-	tv.tv_sec = (ms) / 1000;
-	tv.tv_nsec = ((ms) % 1000) * 1000 * 1000;
-	nanosleep(&tv, &tv);
-}
-#endif
 #endif
 
 bool do_yield(query *q, int msecs)
@@ -41,6 +32,12 @@ bool do_yield(query *q, int msecs)
 	q->yielded = true;
 	q->tmo_msecs = get_time_in_usec() / 1000;
 	q->tmo_msecs += msecs > 0 ? msecs : 1;
+
+	#if USE_LUA
+	if (q->is_task)
+		timer_heap_push(q->pl, q);
+	#endif
+
 	CHECKED(push_choice(q));
 	return false;
 }
@@ -90,17 +87,38 @@ static cell *pop_queue(query *q)
 	return c;
 }
 
-static void push_task(query *q, query *task)
+void push_task(query *q, query *task)
 {
+	acquire_lock(&q->tasks_lock);
 	task->next = q->tasks;
+	task->prev = NULL;
 
 	if (q->tasks)
 		q->tasks->prev = task;
 
 	q->tasks = task;
+	release_lock(&q->tasks_lock);
 }
 
-static query *pop_task(query *q, query *task)
+query *pop_task(query *q, query *task)
+{
+	acquire_lock(&q->tasks_lock);
+	if (task->prev)
+		task->prev->next = task->next;
+
+	if (task->next)
+		task->next->prev = task->prev;
+
+	if (task == q->tasks)
+		q->tasks = task->next;
+	
+	query *next = task->next;
+	task->next = task->prev = NULL;
+	release_lock(&q->tasks_lock);
+	return next;
+}
+
+static query *detach_task_locked(query *q, query *task)
 {
 	if (task->prev)
 		task->prev->next = task->next;
@@ -111,7 +129,9 @@ static query *pop_task(query *q, query *task)
 	if (task == q->tasks)
 		q->tasks = task->next;
 
-	return task->next;
+	query *next = task->next;
+	task->next = task->prev = NULL;
+	return next;
 }
 
 static bool bif_end_wait_0(query *q)
@@ -124,72 +144,139 @@ static bool bif_end_wait_0(query *q)
 
 static bool bif_wait_0(query *q)
 {
-	while (q->tasks && !q->end_wait) {
+	while (true) {
+		acquire_lock(&q->tasks_lock);
+		bool work_done = (q->tasks == NULL && q->inflight == 0);
+		release_lock(&q->tasks_lock);
+		
+		if (work_done || q->end_wait) break;
+
 		CHECK_INTERRUPT();
 		uint64_t now = get_time_in_usec() / 1000;
-		query *task = q->tasks;
-		unsigned spawn_cnt = 0;
-		bool did_something = false;
 		uint64_t min_tmo = 0;
 
+		#if USE_LUA
+		while (true) {
+			query *task = timer_heap_pop(q->pl);
+			if (!task) break;
+			
+			if (task->tmo_msecs > now) {
+				timer_heap_push(q->pl, task);
+				min_tmo = task->tmo_msecs - now;
+				break;
+			}
+
+			task->tmo_msecs = 0;
+			acquire_lock(&q->tasks_lock);
+			if (task->parent == q)
+				detach_task_locked(q, task);
+			if (!task->yielded || !task->st.instr || task->error) {
+				release_lock(&q->tasks_lock);
+				query_destroy(task);
+				continue;
+			}
+
+			q->inflight++;
+			release_lock(&q->tasks_lock);
+			
+			acquire_lock(&q->pl->run_queue_lock);
+			list_push_back(&q->pl->run_queue, task);
+			pthread_cond_signal(&q->pl->run_queue_cond);
+			release_lock(&q->pl->run_queue_lock);
+		}
+		#endif
+
+		acquire_lock(&q->tasks_lock);
+		query *task = q->tasks;
+		query *ready_head = NULL, *ready_tail = NULL;
+		unsigned spawn_cnt = 0;
+
 		while (task) {
-			CHECK_INTERRUPT();
+			query *next = task->next;
+			bool is_ready = false;
 
 			if (task->spawned) {
 				spawn_cnt++;
-
-				#if USE_LUA
-				if (spawn_cnt >= (g_cpu_count * 1024))
-#else
-				if (spawn_cnt >= g_cpu_count)
-#endif
-					break;
+				if (spawn_cnt >= (g_cpu_count * 1024)) break;
 			}
 
 			if (task->tmo_msecs && !task->error) {
+#if USE_LUA
+				task = next;
+				continue;
+#else
 				if (now <= task->tmo_msecs) {
-					uint64_t tmo = task->tmo_msecs - now;
-					if (!min_tmo || tmo < min_tmo) min_tmo = tmo;
-					task = task->next;
+					task = next;
 					continue;
 				}
-
 				task->tmo_msecs = 0;
+#endif
 			}
 
 #if USE_LUA
 			if (task->wait_fd != -1 && !task->error) {
 				struct kpollfd *kfd = NULL;
-				if (sl_get(q->pl->fds, (void*)(ptrdiff_t)task->wait_fd, (const void**)&kfd)) {
-					if (!kfd->revents) {
-						task = task->next;
-						continue;
-					}
+				prolog_lock(q->pl);
+				sl_get(q->pl->fds, (void*)(ptrdiff_t)task->wait_fd, (const void**)&kfd);
+				prolog_unlock(q->pl);
+				if (kfd && !kfd->revents) {
+					task = next;
+					continue;
 				}
 			}
+			is_ready = true;
 #endif
 
 			if (!task->yielded || !task->st.instr || task->error) {
-				query *save = task;
-				task = pop_task(q, task);
-				query_destroy(save);
+				detach_task_locked(q, task);
+				
+				#if USE_LUA
+				timer_heap_delete(q->pl, task);
+				#endif
+				query_destroy(task);
+				task = next;
 				continue;
 			}
 
-			start(task);
-			task = task->next;
-			did_something = true;
-		}
-
-		if (!did_something) {
 #if USE_LUA
-			int timeout = min_tmo > 1000 ? 1000 : (int)min_tmo;
-			if (min_tmo == 0) timeout = 1000; // Default sleep if no timeouts
-			kpoll_wait(&q->pl->kpoll_ctx, timeout);
+			if (is_ready) {
+				detach_task_locked(q, task);
+				if (!ready_head) ready_head = task;
+				else ready_tail->next = task;
+				ready_tail = task;
+				q->inflight++;
+			}
 #else
-			msleep(1);
+			start(task);
 #endif
+			task = next;
 		}
+		release_lock(&q->tasks_lock);
+
+#if USE_LUA
+		if (ready_head) {
+			acquire_lock(&q->pl->run_queue_lock);
+			while (ready_head) {
+				query *next = ready_head->next;
+				list_push_back(&q->pl->run_queue, ready_head);
+				ready_head = next;
+			}
+			pthread_cond_broadcast(&q->pl->run_queue_cond);
+			release_lock(&q->pl->run_queue_lock);
+		} else {
+			int timeout = min_tmo > 1000 ? 1000 : (int)min_tmo;
+			if (min_tmo == 0) {
+				acquire_lock(&q->tasks_lock);
+				timeout = q->inflight ? 1 : 1000;
+				release_lock(&q->tasks_lock);
+			}
+			kpoll_wait(&q->pl->kpoll_ctx, timeout);
+		}
+#else
+		{
+			msleep(1);
+		}
+#endif
 	}
 
 	q->end_wait = false;
@@ -316,6 +403,7 @@ static bool bif_call_task_n(query *q)
 	cell *tmp = prepare_call(q, CALL_SKIP, tmp2, q->st.curr_fp, 0);
 	query *task = query_create_task(q, tmp);
 	task->yielded = task->spawned = true;
+
 	push_task(q, task);
 	return true;
 }

@@ -683,13 +683,18 @@ struct query_ {
 	run_state st;
 	stringbuf sb_buf;
 	char tmpbuf[256];
+	lock dirty_lock;
+	lock tasks_lock;
+	unsigned inflight;
 	bool ignores[MAX_IGNORES];
 	uint64_t total_goals, total_backtracks, total_retries, total_matches, total_inferences;
 	uint64_t total_tcos, total_recovs, total_matched, total_no_recovs;
 	uint64_t step, qid, tmo_msecs, chgen, cycle_error;
 	uint64_t get_started, autofail_n, yield_at;
 	uint64_t cpu_started, time_cpu_last_started, future;
+	pl_idx heap_idx;
 	unsigned realloc_frames, realloc_choices, realloc_slots, realloc_trails;
+	unsigned worker_id;
 	unsigned max_depth, max_eval_depth, print_idx, tab_idx, dump_var_num;
 	unsigned varno, tab0_varno, curr_engine, curr_chan, my_chan;
 	unsigned s_cnt, retries, popp;
@@ -873,8 +878,17 @@ typedef struct {
 struct prolog_ {
 #if USE_LUA
 	struct kpoll kpoll_ctx;
-	lua_State *lua_vm;
+	lua_State *lua_vms[MAX_THREADS];
 	skiplist *fds;
+	query **timer_heap;
+	pl_idx timer_heap_size, timer_heap_cap;
+	lock timer_heap_lock;
+       list run_queue;
+       lock run_queue_lock;
+       pthread_cond_t run_queue_cond;
+       pthread_t worker_threads[MAX_THREADS];
+       unsigned worker_count;
+       unsigned last_worker_id;
 #endif
 	stream streams[MAX_STREAMS];
 	thread threads[MAX_THREADS];

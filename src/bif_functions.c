@@ -21,44 +21,45 @@ bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) {
     char name[256];
     strncpy(name, full_name, sizeof(name));
     name[sizeof(name)-1] = '\0';
+    lua_State *L = get_lua_vm(q);
 
     // Resolve nested tables (e.g. math.sqrt)
     char *token = strtok(name, ".");
-    lua_getglobal(q->pl->lua_vm, token);
+    lua_getglobal(L, token);
     
     while ((token = strtok(NULL, ".")) != NULL) {
-        if (!lua_istable(q->pl->lua_vm, -1)) {
-            lua_pop(q->pl->lua_vm, 1);
+        if (!lua_istable(L, -1)) {
+            lua_pop(L, 1);
             return false;
         }
-        lua_getfield(q->pl->lua_vm, -1, token);
-        lua_remove(q->pl->lua_vm, -2);
+        lua_getfield(L, -1, token);
+        lua_remove(L, -2);
     }
 
-    if (!lua_isfunction(q->pl->lua_vm, -1)) {
-        lua_pop(q->pl->lua_vm, 1);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
         return false;
     }
 
     int arity = c->arity;
     for (int i = 1; i <= arity; i++) {
         cell *arg = deref(q, c + i, c_ctx);
-        prolog_to_lua(q->pl->lua_vm, q, arg, q->latest_ctx);
+        prolog_to_lua(L, q, arg, q->latest_ctx);
     }
 
-    if (lua_pcall(q->pl->lua_vm, arity, 1, 0) != 0) {
-        fprintf(stderr, "Lua Error in expression: %s\n", lua_tostring(q->pl->lua_vm, -1));
-        lua_pop(q->pl->lua_vm, 1);
+    if (lua_pcall(L, arity, 1, 0) != 0) {
+        fprintf(stderr, "Lua Error in expression: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);
         return false;
     }
 
-    cell *res = lua_to_prolog(q->pl->lua_vm, -1, q);
+    cell *res = lua_to_prolog(L, -1, q);
     if (!res) {
-        lua_pop(q->pl->lua_vm, 1);
+        lua_pop(L, 1);
         return false;
     }
     q->accum = *res;
-    lua_pop(q->pl->lua_vm, 1);
+    lua_pop(L, 1);
     return true;
 }
 #endif

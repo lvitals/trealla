@@ -20,13 +20,6 @@
 #define localtime_r(p1,p2) localtime(p1)
 #else
 #include <unistd.h>
-static void msleep(int ms)
-{
-	struct timespec tv = {0};
-	tv.tv_sec = (ms) / 1000;
-	tv.tv_nsec = ((ms) % 1000) * 1000 * 1000;
-	nanosleep(&tv, &tv);
-}
 #endif
 
 #ifdef _WIN32

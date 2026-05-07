@@ -143,10 +143,12 @@ SRCOBJECTS = tpl.o \
 	src/query.o \
 	src/skiplist.o \
 	src/terms.o \
+	src/timer_heap.o \
 	src/toplevel.o \
 	src/unify.o \
 	src/utf8.o \
-	src/version.o
+	src/version.o \
+	src/worker_pool.o
 
 LIBOBJECTS =
 

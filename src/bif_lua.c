@@ -16,6 +16,8 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
+static lock g_lua_lock;
+
 // --- Lua-C Wrappers for Arithmetic ---
 static int l_native_fib(lua_State *L) {
     long long n = luaL_checkinteger(L, 1);
@@ -47,26 +49,31 @@ static int l_native_is_prime(lua_State *L) {
 }
 
 void init_lua_vm(prolog *pl) {
-    if (pl->lua_vm) return;
-    pl->lua_vm = luaL_newstate();
-    luaL_openlibs(pl->lua_vm);
-    
-    // Backing store table
-    lua_newtable(pl->lua_vm);
-    lua_setglobal(pl->lua_vm, "_PROLOG_STORE");
-
-    // State management table
-    lua_newtable(pl->lua_vm);
-    lua_setglobal(pl->lua_vm, "_PROLOG_STATE");
-
-    // Register native C functions into Lua for arithmetic transparency
-    lua_pushcfunction(pl->lua_vm, l_native_fib);
-    lua_setglobal(pl->lua_vm, "fib");
-    lua_pushcfunction(pl->lua_vm, l_native_gcd);
-    lua_setglobal(pl->lua_vm, "gcd");
-    lua_pushcfunction(pl->lua_vm, l_native_is_prime);
-    lua_setglobal(pl->lua_vm, "is_prime");
+    (void)pl;
+    init_lock(&g_lua_lock);
 }
+
+lua_State *get_lua_vm(query *q) {
+    unsigned id = q->worker_id;
+    if (id >= MAX_THREADS) id = 0;
+    acquire_lock(&g_lua_lock);
+    if (!q->pl->lua_vms[id]) {
+        q->pl->lua_vms[id] = luaL_newstate();
+        lua_State *L = q->pl->lua_vms[id];
+        luaL_openlibs(L);
+        lua_newtable(L); lua_setglobal(L, "_PROLOG_STORE");
+        lua_newtable(L); lua_setglobal(L, "_PROLOG_STATE");
+        lua_pushcfunction(L, l_native_fib); lua_setglobal(L, "fib");
+        lua_pushcfunction(L, l_native_gcd); lua_setglobal(L, "gcd");
+        lua_pushcfunction(L, l_native_is_prime); lua_setglobal(L, "is_prime");
+    }
+    lua_State *L = q->pl->lua_vms[id];
+    release_lock(&g_lua_lock);
+    return L;
+}
+
+void lua_vm_lock() { acquire_lock(&g_lua_lock); }
+void lua_vm_unlock() { release_lock(&g_lua_lock); }
 
 // --- Prolog -> Lua ---
 void prolog_to_lua(lua_State *L, query *q, cell *c, pl_ctx c_ctx) {
@@ -229,10 +236,11 @@ static cell *lua_to_prolog_list(lua_State *L, int index, query *q) {
 
 bool bif_lua_eval_1(query *q) {
     GET_FIRST_ARG(p1, any);
+    lua_State *L = get_lua_vm(q);
     const char *script = is_atom(p1) ? C_STR(q, p1) : (p1->val_strb->cstr + p1->strb_off);
-    if (luaL_dostring(q->pl->lua_vm, script) != 0) {
-        fprintf(stderr, "Lua Error: %s\n", lua_tostring(q->pl->lua_vm, -1));
-        lua_pop(q->pl->lua_vm, 1);
+    if (luaL_dostring(L, script) != 0) {
+        fprintf(stderr, "Lua Error: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);
         return false;
     }
     return true;
@@ -242,7 +250,7 @@ bool bif_lua_call_3(query *q) {
     GET_FIRST_ARG(p1, atom);
     GET_NEXT_ARG(p2, any);
     GET_NEXT_ARG(p3, any);
-    lua_State *L = q->pl->lua_vm;
+    lua_State *L = get_lua_vm(q);
     lua_State *coro;
     int n_args = 0;
 
@@ -309,8 +317,9 @@ bool bif_lua_call_3(query *q) {
 bool bif_lua_set_2(query *q) {
     GET_FIRST_ARG(p1, any);
     GET_NEXT_ARG(p2, any);
-    int top = lua_gettop(q->pl->lua_vm);
-    lua_getglobal(q->pl->lua_vm, "_PROLOG_STORE");
+    lua_State *L = get_lua_vm(q);
+    int top = lua_gettop(L);
+    lua_getglobal(L, "_PROLOG_STORE");
     
     module *m = q->pl->global_bb ? q->pl->user_m : q->st.m;
     if (is_compound(p1) && p1->val_off == g_colon_s && p1->arity == 2) {
@@ -326,18 +335,19 @@ bool bif_lua_set_2(query *q) {
     else if (is_integer(p1)) snprintf(keybuf, sizeof(keybuf), "%s:%lld", m->name, (long long)get_smallint(p1));
     else snprintf(keybuf, sizeof(keybuf), "%s:opaque", m->name);
     
-    lua_pushstring(q->pl->lua_vm, keybuf);
-    prolog_to_lua(q->pl->lua_vm, q, p2, p2_ctx);
-    lua_settable(q->pl->lua_vm, -3);
-    lua_settop(q->pl->lua_vm, top);
+    lua_pushstring(L, keybuf);
+    prolog_to_lua(L, q, p2, p2_ctx);
+    lua_settable(L, -3);
+    lua_settop(L, top);
     return true;
 }
 
 bool bif_lua_get_2(query *q) {
     GET_FIRST_ARG(p1, any);
     GET_NEXT_ARG(p2, any);
-    int top = lua_gettop(q->pl->lua_vm);
-    lua_getglobal(q->pl->lua_vm, "_PROLOG_STORE");
+    lua_State *L = get_lua_vm(q);
+    int top = lua_gettop(L);
+    lua_getglobal(L, "_PROLOG_STORE");
     
     module *m = q->pl->global_bb ? q->pl->user_m : q->st.m;
     if (is_compound(p1) && p1->val_off == g_colon_s && p1->arity == 2) {
@@ -353,39 +363,40 @@ bool bif_lua_get_2(query *q) {
     else if (is_integer(p1)) snprintf(keybuf, sizeof(keybuf), "%s:%lld", m->name, (long long)get_smallint(p1));
     else snprintf(keybuf, sizeof(keybuf), "%s:opaque", m->name);
     
-    lua_pushstring(q->pl->lua_vm, keybuf);
-    lua_gettable(q->pl->lua_vm, -2);
+    lua_pushstring(L, keybuf);
+    lua_gettable(L, -2);
     
-    if (lua_isnil(q->pl->lua_vm, -1)) {
-        lua_settop(q->pl->lua_vm, top);
+    if (lua_isnil(L, -1)) {
+        lua_settop(L, top);
         return false;
     }
     
-    cell *res = lua_to_prolog(q->pl->lua_vm, -1, q);
+    cell *res = lua_to_prolog(L, -1, q);
     bool ok = unify(q, p2, p2_ctx, res, q->st.curr_fp);
-    lua_settop(q->pl->lua_vm, top);
+    lua_settop(L, top);
     return ok;
 }
 
 bool bif_lua_yield_2(query *q) {
     GET_FIRST_ARG(p1, any);
     GET_NEXT_ARG(p2, any);
+    lua_State *L = get_lua_vm(q);
     if (!q->retry) {
-        if (is_atom(p1)) lua_getglobal(q->pl->lua_vm, C_STR(q, p1));
-        else prolog_to_lua(q->pl->lua_vm, q, p1, p1_ctx);
-        if (!lua_istable(q->pl->lua_vm, -1)) { lua_pop(q->pl->lua_vm, 1); return false; }
-        lua_setglobal(q->pl->lua_vm, "_CURRENT_TABLE");
-        lua_pushnil(q->pl->lua_vm);
-        lua_setglobal(q->pl->lua_vm, "_CURRENT_KEY");
+        if (is_atom(p1)) lua_getglobal(L, C_STR(q, p1));
+        else prolog_to_lua(L, q, p1, p1_ctx);
+        if (!lua_istable(L, -1)) { lua_pop(L, 1); return false; }
+        lua_setglobal(L, "_CURRENT_TABLE");
+        lua_pushnil(L);
+        lua_setglobal(L, "_CURRENT_KEY");
     }
-    lua_getglobal(q->pl->lua_vm, "_CURRENT_TABLE");
-    lua_getglobal(q->pl->lua_vm, "_CURRENT_KEY");
-    if (lua_next(q->pl->lua_vm, -2)) {
-        lua_pushvalue(q->pl->lua_vm, -2);
-        lua_setglobal(q->pl->lua_vm, "_CURRENT_KEY");
-        cell *res = lua_to_prolog(q->pl->lua_vm, -1, q);
+    lua_getglobal(L, "_CURRENT_TABLE");
+    lua_getglobal(L, "_CURRENT_KEY");
+    if (lua_next(L, -2)) {
+        lua_pushvalue(L, -2);
+        lua_setglobal(L, "_CURRENT_KEY");
+        cell *res = lua_to_prolog(L, -1, q);
         bool ok = unify(q, p2, p2_ctx, res, q->st.curr_fp);
-        lua_pop(q->pl->lua_vm, 3);
+        lua_pop(L, 3);
         if (ok) return retry_choice(q);
     }
     return false;
@@ -393,26 +404,28 @@ bool bif_lua_yield_2(query *q) {
 
 bool bif_lua_state_visit_1(query *q) {
     GET_FIRST_ARG(p1, any);
-    lua_getglobal(q->pl->lua_vm, "_PROLOG_STATE");
-    prolog_to_lua(q->pl->lua_vm, q, p1, p1_ctx);
-    lua_pushvalue(q->pl->lua_vm, -1);
-    lua_gettable(q->pl->lua_vm, -3);
+    lua_State *L = get_lua_vm(q);
+    lua_getglobal(L, "_PROLOG_STATE");
+    prolog_to_lua(L, q, p1, p1_ctx);
+    lua_pushvalue(L, -1);
+    lua_gettable(L, -3);
     
-    if (!lua_isnil(q->pl->lua_vm, -1)) {
-        lua_pop(q->pl->lua_vm, 2);
+    if (!lua_isnil(L, -1)) {
+        lua_pop(L, 2);
         return false;
     }
     
-    lua_pop(q->pl->lua_vm, 1);
-    lua_pushboolean(q->pl->lua_vm, 1);
-    lua_settable(q->pl->lua_vm, -3);
-    lua_pop(q->pl->lua_vm, 1);
+    lua_pop(L, 1);
+    lua_pushboolean(L, 1);
+    lua_settable(L, -3);
+    lua_pop(L, 1);
     return true;
 }
 
 bool bif_lua_state_clear_0(query *q) {
-    lua_newtable(q->pl->lua_vm);
-    lua_setglobal(q->pl->lua_vm, "_PROLOG_STATE");
+    lua_State *L = get_lua_vm(q);
+    lua_newtable(L);
+    lua_setglobal(L, "_PROLOG_STATE");
     return true;
 }
 
@@ -458,54 +471,55 @@ bool bif_lua_union_3(query *q) {
     GET_FIRST_ARG(p1, any);
     GET_NEXT_ARG(p2, any);
     GET_NEXT_ARG(p3, any);
-    int top = lua_gettop(q->pl->lua_vm);
-    lua_checkstack(q->pl->lua_vm, 100);
-    lua_newtable(q->pl->lua_vm); // Set
-    lua_newtable(q->pl->lua_vm); // Result
+    lua_State *L = get_lua_vm(q);
+    int top = lua_gettop(L);
+    lua_checkstack(L, 100);
+    lua_newtable(L); // Set
+    lua_newtable(L); // Result
     int res_idx = 1;
     
-    prolog_to_lua(q->pl->lua_vm, q, p1, p1_ctx);
-    if (lua_istable(q->pl->lua_vm, -1)) {
-        int n = (int)lua_rawlen(q->pl->lua_vm, -1);
+    prolog_to_lua(L, q, p1, p1_ctx);
+    if (lua_istable(L, -1)) {
+        int n = (int)lua_rawlen(L, -1);
         for (int i = 1; i <= n; i++) {
-            lua_rawgeti(q->pl->lua_vm, -1, i);
-            lua_pushvalue(q->pl->lua_vm, -1);
-            lua_gettable(q->pl->lua_vm, top + 1);
-            if (lua_isnil(q->pl->lua_vm, -1)) {
-                lua_pop(q->pl->lua_vm, 1);
-                lua_pushvalue(q->pl->lua_vm, -1);
-                lua_pushboolean(q->pl->lua_vm, 1);
-                lua_settable(q->pl->lua_vm, top + 1);
-                lua_pushvalue(q->pl->lua_vm, -1);
-                lua_rawseti(q->pl->lua_vm, top + 2, res_idx++);
-            } else lua_pop(q->pl->lua_vm, 1);
-            lua_pop(q->pl->lua_vm, 1);
+            lua_rawgeti(L, -1, i);
+            lua_pushvalue(L, -1);
+            lua_gettable(L, top + 1);
+            if (lua_isnil(L, -1)) {
+                lua_pop(L, 1);
+                lua_pushvalue(L, -1);
+                lua_pushboolean(L, 1);
+                lua_settable(L, top + 1);
+                lua_pushvalue(L, -1);
+                lua_rawseti(L, top + 2, res_idx++);
+            } else lua_pop(L, 1);
+            lua_pop(L, 1);
         }
     }
-    lua_pop(q->pl->lua_vm, 1);
+    lua_pop(L, 1);
     
-    prolog_to_lua(q->pl->lua_vm, q, p2, p2_ctx);
-    if (lua_istable(q->pl->lua_vm, -1)) {
-        int n = (int)lua_rawlen(q->pl->lua_vm, -1);
+    prolog_to_lua(L, q, p2, p2_ctx);
+    if (lua_istable(L, -1)) {
+        int n = (int)lua_rawlen(L, -1);
         for (int i = 1; i <= n; i++) {
-            lua_rawgeti(q->pl->lua_vm, -1, i);
-            lua_pushvalue(q->pl->lua_vm, -1);
-            lua_gettable(q->pl->lua_vm, top + 1);
-            if (lua_isnil(q->pl->lua_vm, -1)) {
-                lua_pop(q->pl->lua_vm, 1);
-                lua_pushvalue(q->pl->lua_vm, -1);
-                lua_pushboolean(q->pl->lua_vm, 1);
-                lua_settable(q->pl->lua_vm, top + 1);
-                lua_pushvalue(q->pl->lua_vm, -1);
-                lua_rawseti(q->pl->lua_vm, top + 2, res_idx++);
-            } else lua_pop(q->pl->lua_vm, 1);
-            lua_pop(q->pl->lua_vm, 1);
+            lua_rawgeti(L, -1, i);
+            lua_pushvalue(L, -1);
+            lua_gettable(L, top + 1);
+            if (lua_isnil(L, -1)) {
+                lua_pop(L, 1);
+                lua_pushvalue(L, -1);
+                lua_pushboolean(L, 1);
+                lua_settable(L, top + 1);
+                lua_pushvalue(L, -1);
+                lua_rawseti(L, top + 2, res_idx++);
+            } else lua_pop(L, 1);
+            lua_pop(L, 1);
         }
     }
-    lua_pop(q->pl->lua_vm, 1);
+    lua_pop(L, 1);
     
-    cell *res = lua_to_prolog_list(q->pl->lua_vm, top + 2, q);
-    lua_settop(q->pl->lua_vm, top);
+    cell *res = lua_to_prolog_list(L, top + 2, q);
+    lua_settop(L, top);
     return unify(q, p3, p3_ctx, res, q->st.curr_fp);
 }
 
@@ -513,79 +527,81 @@ bool bif_lua_intersection_3(query *q) {
     GET_FIRST_ARG(p1, any);
     GET_NEXT_ARG(p2, any);
     GET_NEXT_ARG(p3, any);
-    int top = lua_gettop(q->pl->lua_vm);
-    lua_checkstack(q->pl->lua_vm, 100);
-    lua_newtable(q->pl->lua_vm); // Set
-    lua_newtable(q->pl->lua_vm); // Result
+    lua_State *L = get_lua_vm(q);
+    int top = lua_gettop(L);
+    lua_checkstack(L, 100);
+    lua_newtable(L); // Set
+    lua_newtable(L); // Result
     int res_idx = 1;
     
-    prolog_to_lua(q->pl->lua_vm, q, p1, p1_ctx);
-    if (lua_istable(q->pl->lua_vm, -1)) {
-        int n = (int)lua_rawlen(q->pl->lua_vm, -1);
+    prolog_to_lua(L, q, p1, p1_ctx);
+    if (lua_istable(L, -1)) {
+        int n = (int)lua_rawlen(L, -1);
         for (int i = 1; i <= n; i++) {
-            lua_rawgeti(q->pl->lua_vm, -1, i);
-            lua_pushboolean(q->pl->lua_vm, 1);
-            lua_settable(q->pl->lua_vm, top + 1);
+            lua_rawgeti(L, -1, i);
+            lua_pushboolean(L, 1);
+            lua_settable(L, top + 1);
         }
     }
-    lua_pop(q->pl->lua_vm, 1);
+    lua_pop(L, 1);
     
-    prolog_to_lua(q->pl->lua_vm, q, p2, p2_ctx);
-    if (lua_istable(q->pl->lua_vm, -1)) {
-        int n = (int)lua_rawlen(q->pl->lua_vm, -1);
+    prolog_to_lua(L, q, p2, p2_ctx);
+    if (lua_istable(L, -1)) {
+        int n = (int)lua_rawlen(L, -1);
         for (int i = 1; i <= n; i++) {
-            lua_rawgeti(q->pl->lua_vm, -1, i);
-            lua_pushvalue(q->pl->lua_vm, -1);
-            lua_gettable(q->pl->lua_vm, top + 1);
-            if (!lua_isnil(q->pl->lua_vm, -1)) {
-                lua_pop(q->pl->lua_vm, 1);
-                lua_pushvalue(q->pl->lua_vm, -1);
-                lua_rawseti(q->pl->lua_vm, top + 2, res_idx++);
-            } else lua_pop(q->pl->lua_vm, 1);
-            lua_pop(q->pl->lua_vm, 1);
+            lua_rawgeti(L, -1, i);
+            lua_pushvalue(L, -1);
+            lua_gettable(L, top + 1);
+            if (!lua_isnil(L, -1)) {
+                lua_pop(L, 1);
+                lua_pushvalue(L, -1);
+                lua_rawseti(L, top + 2, res_idx++);
+            } else lua_pop(L, 1);
+            lua_pop(L, 1);
         }
     }
-    lua_pop(q->pl->lua_vm, 1);
+    lua_pop(L, 1);
     
-    cell *res = lua_to_prolog_list(q->pl->lua_vm, top + 2, q);
-    lua_settop(q->pl->lua_vm, top);
+    cell *res = lua_to_prolog_list(L, top + 2, q);
+    lua_settop(L, top);
     return unify(q, p3, p3_ctx, res, q->st.curr_fp);
 }
 
 bool bif_lua_powerset_2(query *q) {
     GET_FIRST_ARG(p1, any);
     GET_NEXT_ARG(p2, any);
-    int top = lua_gettop(q->pl->lua_vm);
-    lua_checkstack(q->pl->lua_vm, 100);
-    lua_newtable(q->pl->lua_vm); // Result
-    lua_newtable(q->pl->lua_vm); // empty set
-    lua_rawseti(q->pl->lua_vm, -2, 1);
+    lua_State *L = get_lua_vm(q);
+    int top = lua_gettop(L);
+    lua_checkstack(L, 100);
+    lua_newtable(L); // Result
+    lua_newtable(L); // empty set
+    lua_rawseti(L, -2, 1);
     
-    prolog_to_lua(q->pl->lua_vm, q, p1, p1_ctx);
-    if (lua_istable(q->pl->lua_vm, -1)) {
-        int n = (int)lua_rawlen(q->pl->lua_vm, -1);
+    prolog_to_lua(L, q, p1, p1_ctx);
+    if (lua_istable(L, -1)) {
+        int n = (int)lua_rawlen(L, -1);
         for (int i = 1; i <= n; i++) {
-            lua_rawgeti(q->pl->lua_vm, -1, i);
-            int cur_len = (int)lua_rawlen(q->pl->lua_vm, top + 1);
+            lua_rawgeti(L, -1, i);
+            int cur_len = (int)lua_rawlen(L, top + 1);
             for (int j = 1; j <= cur_len; j++) {
-                lua_rawgeti(q->pl->lua_vm, top + 1, j);
-                int set_len = (int)lua_rawlen(q->pl->lua_vm, -1);
-                lua_newtable(q->pl->lua_vm);
+                lua_rawgeti(L, top + 1, j);
+                int set_len = (int)lua_rawlen(L, -1);
+                lua_newtable(L);
                 for (int k = 1; k <= set_len; k++) {
-                    lua_rawgeti(q->pl->lua_vm, -2, k);
-                    lua_rawseti(q->pl->lua_vm, -2, k);
+                    lua_rawgeti(L, -2, k);
+                    lua_rawseti(L, -2, k);
                 }
-                lua_pushvalue(q->pl->lua_vm, -3);
-                lua_rawseti(q->pl->lua_vm, -2, set_len + 1);
-                lua_rawseti(q->pl->lua_vm, top + 1, cur_len + j);
-                lua_pop(q->pl->lua_vm, 1);
+                lua_pushvalue(L, -3);
+                lua_rawseti(L, -2, set_len + 1);
+                lua_rawseti(L, top + 1, cur_len + j);
+                lua_pop(L, 1);
             }
-            lua_pop(q->pl->lua_vm, 1);
+            lua_pop(L, 1);
         }
     }
-    lua_pop(q->pl->lua_vm, 1);
-    cell *res = lua_to_prolog(q->pl->lua_vm, top + 1, q);
-    lua_settop(q->pl->lua_vm, top);
+    lua_pop(L, 1);
+    cell *res = lua_to_prolog(L, top + 1, q);
+    lua_settop(L, top);
     return unify(q, p2, p2_ctx, res, q->st.curr_fp);
 }
 

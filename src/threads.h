@@ -18,3 +18,8 @@ void init_lock(lock *l);
 void deinit_lock(lock *l);
 void acquire_lock(lock *l);
 void release_lock(lock *l);
+void msleep(int ms);
+
+struct prolog_;
+void init_worker_pool(struct prolog_ *pl);
+void destroy_worker_pool(struct prolog_ *pl);

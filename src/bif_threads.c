@@ -57,14 +57,19 @@ void release_lock(lock *l) {}
 
 #endif
 
-#if USE_THREADS
-static void msleep(int ms)
+void msleep(int ms)
 {
+#ifdef _WIN32
+	Sleep(ms);
+#else
 	struct timespec tv = {0};
 	tv.tv_sec = (ms) / 1000;
 	tv.tv_nsec = ((ms) % 1000) * 1000 * 1000;
 	nanosleep(&tv, &tv);
+#endif
 }
+
+#if USE_THREADS
 
 #define is_threaded(t) (!(t)->is_queue_only && !(t)->is_mutex_only)
 

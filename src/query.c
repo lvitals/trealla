@@ -13,13 +13,6 @@
 #include <windows.h>
 #define msleep Sleep
 #else
-static void msleep(int ms)
-{
-	struct timespec tv = {0};
-	tv.tv_sec = (ms) / 1000;
-	tv.tv_nsec = ((ms) % 1000) * 1000 * 1000;
-	nanosleep(&tv, &tv);
-}
 #endif
 
 #define Trace(p1,p2,p3,p4) if (q->trace /*&& !consulting*/) trace_call(p1,p2,p3,p4)
@@ -1911,7 +1904,11 @@ static query *query_create_(module *m, bool is_small)
 	q->vgen = 1;
 	q->dump_var_num = -1;
 	q->dump_var_ctx = -1;
+	init_lock(&q->dirty_lock);
+	init_lock(&q->tasks_lock);
+	q->inflight = 0;
 	q->wait_fd = -1;
+	q->heap_idx = ERR_IDX;
 
 	//if (is_threaded) q->trace = 1;
 

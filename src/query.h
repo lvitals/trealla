@@ -92,6 +92,13 @@ bool do_post_unify_hook(query *q, bool is_builtin);
 bool any_attributed(query *q);
 bool do_load_file(query *q, cell *p1, pl_ctx p1_ctx);
 bool stream_close(query *q, int n);
+void timer_heap_push(prolog *pl, query *q);
+void timer_heap_delete(prolog *pl, query *q);
+query *timer_heap_pop(prolog *pl);
+
+void push_task(query *q, query *task);
+query *pop_task(query *q, query *task);
+
 void leave_predicate(query *q, predicate *pr, bool is_final);
 
 #if USE_THREADS

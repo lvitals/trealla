@@ -6,6 +6,9 @@
 
 // Helpers para integração no motor
 void init_lua_vm(prolog *pl);
+lua_State *get_lua_vm(query *q);
+void lua_vm_lock();
+void lua_vm_unlock();
 cell *lua_to_prolog(lua_State *L, int index, query *q);
 void prolog_to_lua(lua_State *L, query *q, cell *c, pl_ctx c_ctx);
 bool call_lua_function(query *q, cell *c, pl_ctx c_ctx);
