@@ -7,7 +7,7 @@
 
 /*
  * Native Hash Table for Trealla.
- * Hybrid: Array part for small dense integers, Hash part for everything else.
+ * Optimized with FNV-1a for strings.
  */
 
 static bool is_equal(prolog *pl, const cell *c1, const cell *c2)
@@ -46,10 +46,11 @@ static uint64_t hash_cell(prolog *pl, const cell *c)
         return (uint64_t)c->val_off;
     if (is_cstring(c)) {
         const char *s = _C_STR(pl, (cell*)c);
-        size_t len = _C_STRLEN(pl, (cell*)c);
-        uint64_t h = 0;
-        for (size_t i = 0; i < len; i++)
-            h = h * 31 + s[i];
+        uint64_t h = 14695981039346656037ULL;
+        while (*s) {
+            h ^= (uint64_t)*s++;
+            h *= 1099511628211ULL;
+        }
         return h;
     }
     if (is_compound(c)) {
@@ -67,7 +68,7 @@ hash_table *hash_create(pl_idx size, hash_free_val_t free_val, void *param)
 {
     hash_table *ht = calloc(1, sizeof(hash_table));
     if (!ht) return NULL;
-    ht->size = size > 0 ? size : 16;
+    ht->size = size > 0 ? size : 32;
     ht->nodes = calloc(ht->size, sizeof(hash_node*));
     ht->free_val = free_val;
     ht->param = param;
@@ -91,7 +92,8 @@ void hash_destroy(hash_table *ht)
             for (pl_idx i = 0; i < ht->asize; i++) {
                 if (!is_empty(&ht->array[i])) {
                     cell key;
-                    make_int(&key, i);
+                    key.tag = TAG_INT;
+                    set_smallint(&key, i);
                     ht->free_val(&key, &ht->array[i], ht->param);
                 }
             }
@@ -104,7 +106,6 @@ void hash_destroy(hash_table *ht)
 
 bool hash_set(hash_table *ht, prolog *pl, const cell *key, const cell *val)
 {
-    // Array part for small dense integers (0..1023)
     if (is_smallint(key) && get_smallint(key) >= 0 && get_smallint(key) < 1024) {
         pl_idx idx = (pl_idx)get_smallint(key);
         if (idx >= ht->asize) {
@@ -144,7 +145,6 @@ bool hash_set(hash_table *ht, prolog *pl, const cell *key, const cell *val)
     ht->nodes[h] = n;
     ht->count++;
 
-    // Rehash if too crowded
     if (ht->count > ht->size * 2) {
         pl_idx new_size = ht->size * 2;
         hash_node **new_nodes = calloc(new_size, sizeof(hash_node*));
@@ -164,7 +164,6 @@ bool hash_set(hash_table *ht, prolog *pl, const cell *key, const cell *val)
             ht->size = new_size;
         }
     }
-
     return true;
 }
 
@@ -244,7 +243,8 @@ bool hash_next(hash_iter *it, cell *key, cell *val)
         while (it->idx < it->ht->asize) {
             cell *c = &it->ht->array[it->idx];
             if (!is_empty(c)) {
-                make_int(key, it->idx);
+                key->tag = TAG_INT;
+                set_smallint(key, it->idx);
                 *val = *c;
                 it->idx++;
                 return true;

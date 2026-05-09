@@ -76,9 +76,9 @@ static bool bif_bb_b_put_2(query *q)
 	val_ptr_cell.tag = TAG_EMPTY;
 	val_ptr_cell.val_ptr = val;
 
-	prolog_lock(q->pl);
+	acquire_lock(&q->pl->bb_lock);
 	hash_set(q->pl->keyval, q->pl, &key, &val_ptr_cell);
-	prolog_unlock(q->pl);
+	release_lock(&q->pl->bb_lock);
 
 	return true;
 }
@@ -93,7 +93,7 @@ static bool bif_bb_put_2(query *q)
 		return throw_error(q, p1, p1_ctx, "type_error", "callable");
 
 	module *m;
-	char tmpbuf1[1024], tmpbuf2[1024];
+	char tmpbuf2[1024];
 
 	if (is_compound(p1)) {
 		cell *p1_m = p1 + 1;
@@ -110,14 +110,6 @@ static bool bif_bb_put_2(query *q)
 		m = q->pl->global_bb ? q->pl->user_m : q->st.m;
 
 	if (is_atom(p1))
-		snprintf(tmpbuf1, sizeof(tmpbuf1), "%s:%s:b", m->name, C_STR(q, p1));
-	else
-		snprintf(tmpbuf1, sizeof(tmpbuf1), "%s:%d:b", m->name, (int)get_smallint(p1));
-
-	cell key1;
-	make_atom(&key1, new_atom(q->pl, tmpbuf1));
-
-	if (is_atom(p1))
 		snprintf(tmpbuf2, sizeof(tmpbuf2), "%s:%s", m->name, C_STR(q, p1));
 	else
 		snprintf(tmpbuf2, sizeof(tmpbuf2), "%s:%d", m->name, (int)get_smallint(p1));
@@ -125,24 +117,38 @@ static bool bif_bb_put_2(query *q)
 	if (DO_DUMP) DUMP_TERM2("bb_put", tmpbuf2, p2, p2_ctx, 1);
 
 	cell key2;
-	make_atom(&key2, new_atom(q->pl, tmpbuf2));
-	CHECKED(init_tmp_heap(q));
+	cell key_cstr;
+	key_cstr.tag = TAG_CSTR;
+	key_cstr.val_str = tmpbuf2;
+	key_cstr.arity = 0;
+	key_cstr.flags = 0;
+
+	acquire_lock(&q->pl->bb_lock);
+	if (!hash_get(q->pl->bb_cache, q->pl, &key_cstr, &key2)) {
+		make_atom(&key2, new_atom(q->pl, tmpbuf2));
+		hash_set(q->pl->bb_cache, q->pl, &key_cstr, &key2);
+	}
+
+	CHECKED(init_tmp_heap(q), release_lock(&q->pl->bb_lock));
 	cell *tmp = copy_term_to_tmp(q, p2, p2_ctx, false);
-	CHECKED(tmp);
+	if (!tmp) {
+		release_lock(&q->pl->bb_lock);
+		return false;
+	}
 	pl_idx num_cells = tmp->num_cells;
 	cell *val = malloc(sizeof(cell)*num_cells);
-	CHECKED(val);
+	if (!val) {
+		release_lock(&q->pl->bb_lock);
+		return false;
+	}
 	dup_cells(val, tmp, tmp->num_cells);
 
 	cell val_ptr_cell;
 	val_ptr_cell.tag = TAG_EMPTY;
 	val_ptr_cell.val_ptr = val;
 
-	prolog_lock(q->pl);
-	hash_del(q->pl->keyval, q->pl, &key1);
-	hash_del(q->pl->keyval, q->pl, &key2);
 	hash_set(q->pl->keyval, q->pl, &key2, &val_ptr_cell);
-	prolog_unlock(q->pl);
+	release_lock(&q->pl->bb_lock);
 
 	return true;
 }
@@ -178,26 +184,46 @@ static bool bif_bb_get_2(query *q)
 		snprintf(tmpbuf, sizeof(tmpbuf), "%s:%d:b", m->name, (int)get_smallint(p1));
 
 	cell key;
-	make_atom(&key, new_atom(q->pl, tmpbuf));
+	cell key_cstr;
+	key_cstr.tag = TAG_CSTR;
+	key_cstr.val_str = tmpbuf;
+	key_cstr.arity = 0;
+	key_cstr.flags = 0;
 	cell val_cell;
 
-	prolog_lock(q->pl);
+	acquire_lock(&q->pl->bb_lock);
 
-	if (!hash_get(q->pl->keyval, q->pl, &key, &val_cell)) {
-		if (is_atom(p1))
-			snprintf(tmpbuf, sizeof(tmpbuf), "%s:%s", m->name, C_STR(q, p1));
-		else
-			snprintf(tmpbuf, sizeof(tmpbuf), "%s:%d", m->name, (int)get_smallint(p1));
-
+	if (hash_get(q->pl->bb_cache, q->pl, &key_cstr, &key)) {
+		if (hash_get(q->pl->keyval, q->pl, &key, &val_cell))
+			goto found;
+	} else {
 		make_atom(&key, new_atom(q->pl, tmpbuf));
-
-		if (!hash_get(q->pl->keyval, q->pl, &key, &val_cell)) {
-			prolog_unlock(q->pl);
-			return false;
-		}
+		hash_set(q->pl->bb_cache, q->pl, &key_cstr, &key);
+		if (hash_get(q->pl->keyval, q->pl, &key, &val_cell))
+			goto found;
 	}
 
-	prolog_unlock(q->pl);
+	if (is_atom(p1))
+		snprintf(tmpbuf, sizeof(tmpbuf), "%s:%s", m->name, C_STR(q, p1));
+	else
+		snprintf(tmpbuf, sizeof(tmpbuf), "%s:%d", m->name, (int)get_smallint(p1));
+
+	key_cstr.val_str = tmpbuf;
+	if (hash_get(q->pl->bb_cache, q->pl, &key_cstr, &key)) {
+		if (hash_get(q->pl->keyval, q->pl, &key, &val_cell))
+			goto found;
+	} else {
+		make_atom(&key, new_atom(q->pl, tmpbuf));
+		hash_set(q->pl->bb_cache, q->pl, &key_cstr, &key);
+		if (hash_get(q->pl->keyval, q->pl, &key, &val_cell))
+			goto found;
+	}
+
+	release_lock(&q->pl->bb_lock);
+	return false;
+
+found:
+	release_lock(&q->pl->bb_lock);
 
 	CHECKED(check_frame(q, MAX_ARITY));
 	try_me(q, MAX_ARITY);
@@ -254,17 +280,17 @@ static bool bif_bb_delete_2(query *q)
 	make_atom(&key, new_atom(q->pl, tmpbuf));
 	cell val_cell;
 
-	prolog_lock(q->pl);
+	acquire_lock(&q->pl->bb_lock);
 
 	if (!hash_get(q->pl->keyval, q->pl, &key, &val_cell)) {
-		prolog_unlock(q->pl);
+		release_lock(&q->pl->bb_lock);
 		return false;
 	}
 
-	CHECKED(check_frame(q, MAX_ARITY), prolog_unlock(q->pl));
+	CHECKED(check_frame(q, MAX_ARITY), release_lock(&q->pl->bb_lock));
 	try_me(q, MAX_ARITY);
 	cell *tmp = copy_term_to_heap(q, (cell*)val_cell.val_ptr, q->st.fp, false);
-	CHECKED(tmp, prolog_unlock(q->pl));
+	CHECKED(tmp, release_lock(&q->pl->bb_lock));
 	GET_FIRST_ARG(p1x,nonvar);
 	GET_NEXT_ARG(p2,any);
 
@@ -277,17 +303,17 @@ static bool bif_bb_delete_2(query *q)
 		slot *e2 = get_slot(q, f2, p2->var_num);
 		*e2 = *e;
 		bool ok = hash_del(q->pl->keyval, q->pl, &key);
-		prolog_unlock(q->pl);
+		release_lock(&q->pl->bb_lock);
 		return ok;
 	}
 
 	if (!unify(q, p2, p2_ctx, tmp, q->st.curr_fp)) {
-		prolog_unlock(q->pl);
+		release_lock(&q->pl->bb_lock);
 		return false;
 	}
 
 	bool ok = hash_del(q->pl->keyval, q->pl, &key);
-	prolog_unlock(q->pl);
+	release_lock(&q->pl->bb_lock);
 	return ok;
 }
 
@@ -325,19 +351,19 @@ static bool bif_bb_update_3(query *q)
 	make_atom(&key, new_atom(q->pl, tmpbuf));
 	cell val_cell;
 
-	prolog_lock(q->pl);
+	acquire_lock(&q->pl->bb_lock);
 
 	if (!hash_get(q->pl->keyval, q->pl, &key, &val_cell)) {
-		prolog_unlock(q->pl);
+		release_lock(&q->pl->bb_lock);
 		return false;
 	}
 
-	CHECKED(check_frame(q, MAX_ARITY), prolog_unlock(q->pl));
+	CHECKED(check_frame(q, MAX_ARITY), release_lock(&q->pl->bb_lock));
 	try_me(q, MAX_ARITY);
 	q->noderef = true;
 	cell *tmp = copy_term_to_heap(q, (cell*)val_cell.val_ptr, q->st.fp, false);
 	q->noderef = false;
-	CHECKED(tmp, prolog_unlock(q->pl));
+	CHECKED(tmp, release_lock(&q->pl->bb_lock));
 	GET_FIRST_ARG(p1x,nonvar);
 	GET_NEXT_ARG(p2,any);
 	GET_NEXT_ARG(p3,any);
@@ -345,14 +371,14 @@ static bool bif_bb_update_3(query *q)
 	if (DO_DUMP) DUMP_TERM2("bb_update", tmpbuf, p2, p2_ctx, 1);
 
 	if (!unify(q, p2, p2_ctx, tmp, q->st.curr_fp)) {
-		prolog_unlock(q->pl);
+		release_lock(&q->pl->bb_lock);
 		return false;
 	}
 
 	tmp = copy_term_to_heap(q, p3, p3_ctx, false);
-	CHECKED(tmp, prolog_unlock(q->pl));
+	CHECKED(tmp, release_lock(&q->pl->bb_lock));
 	cell *value = malloc(sizeof(cell)*tmp->num_cells);
-	CHECKED(value, prolog_unlock(q->pl));
+	CHECKED(value, release_lock(&q->pl->bb_lock));
 	dup_cells(value, tmp, tmp->num_cells);
 
 	cell val_ptr_cell;
@@ -361,7 +387,7 @@ static bool bif_bb_update_3(query *q)
 
 	hash_set(q->pl->keyval, q->pl, &key, &val_ptr_cell);
 
-	prolog_unlock(q->pl);
+	release_lock(&q->pl->bb_lock);
 
 	return true;
 }
@@ -370,9 +396,9 @@ void bb_erase(module *m, const char *ref)
 {
 	cell key;
 	make_atom(&key, new_atom(m->pl, ref));
-	prolog_lock(m->pl);
+	acquire_lock(&m->pl->bb_lock);
 	hash_del(m->pl->keyval, m->pl, &key);
-	prolog_unlock(m->pl);
+	release_lock(&m->pl->bb_lock);
 }
 
 builtins g_bboard_bifs[] =

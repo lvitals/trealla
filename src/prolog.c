@@ -674,6 +674,7 @@ void pl_destroy(prolog *pl)
 
 	sl_destroy(pl->fortab);
 	hash_destroy(pl->keyval);
+	hash_destroy(pl->bb_cache);
 	sl_destroy(pl->help);
 	free(pl->tabs);
 
@@ -759,6 +760,7 @@ prolog *pl_create()
 	}
 
 	CHECK_SENTINEL(pl->keyval = hash_create(0, bb_keyval_free, NULL), NULL);
+	CHECK_SENTINEL(pl->bb_cache = hash_create(0, NULL, NULL), NULL);
 
 	pl->streams[0].fp = stdin;
 	CHECK_SENTINEL(pl->streams[0].alias = sl_create((void*)fake_strcmp, (void*)keyfree, NULL), NULL);
@@ -782,7 +784,7 @@ prolog *pl_create()
 	pl->streams[2].eof_action = eof_action_reset;
 
 	init_lock(&pl->guard);
-
+	init_lock(&pl->bb_lock);
 #if USE_THREADS
 	thread_initialize(pl);
 #endif

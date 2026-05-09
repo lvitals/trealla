@@ -904,9 +904,9 @@ struct prolog_ {
 	var_item *tabs;
 	parser *p;
 	skiplist *biftab, *help, *fortab;
-	hash_table *keyval;
+	hash_table *keyval, *bb_cache;
+	lock guard, bb_lock;
 	FILE *logfp;
-	lock guard;
 	size_t tabs_size;
 	uint64_t s_last, s_cnt, seed, thr_cnt;
 	pl_refcnt q_cnt, dbgen;
