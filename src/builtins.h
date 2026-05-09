@@ -72,6 +72,7 @@ bool wrap_ffi_predicate(query *q, builtins *bif_ptr);
 
 bool call_builtin(query *q, cell *c, pl_ctx c_ctx);
 bool call_userfun(query *q, cell *c, pl_ctx c_ctx);
+bool call_lua_function(query *q, cell *c, pl_ctx c_ctx);
 
 #define eval(q,c)														\
 	is_evaluable(c) || is_builtin(c) ? (call_builtin(q,c,c##_ctx), q->accum) : \

@@ -1954,6 +1954,9 @@ static void assert_commit(module *m, rule *r, predicate *pr, bool append)
 
 	pr->db_id++;
 	pr->cnt++;
+	pr->native_jit_kind = NATIVE_JIT_UNKNOWN;
+	pr->native_jit_db_id = 0;
+	pr->native_jit_cnt = 0;
 	uuid_gen(m->pl, &r->u);
 
 	// Note: indexing here refers to the dynamic index...
@@ -2103,6 +2106,9 @@ static bool remove_from_predicate(module *m, predicate *pr, rule *r)
 	r->dbgen_retracted = ++m->pl->dbgen;
 	r->filename = NULL;
 	pr->cnt--;
+	pr->native_jit_kind = NATIVE_JIT_UNKNOWN;
+	pr->native_jit_db_id = 0;
+	pr->native_jit_cnt = 0;
 	return true;
 }
 

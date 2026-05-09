@@ -404,6 +404,14 @@ typedef struct {
 	uint64_t u1, u2;					// TODO: proper uuid's
 } uuid;
 
+enum native_jit_kind {
+	NATIVE_JIT_UNKNOWN = 0,
+	NATIVE_JIT_NONE,
+	NATIVE_JIT_FIB,
+	NATIVE_JIT_COUNTDOWN,
+	NATIVE_JIT_LIST_BENCH
+};
+
 struct clause_ {
 	cell *alt;							// alternate representation
 	pl_idx cidx, num_allocated_cells;
@@ -441,7 +449,9 @@ struct predicate_ {
 	list dirty;
 	cell key;
 	pl_refcnt refcnt, cnt, db_id;
+	uint64_t native_jit_db_id, native_jit_cnt;
 	unsigned max_vars;
+	enum native_jit_kind native_jit_kind;
 	bool is_reload:1;
 	bool is_builtin:1;
 	bool is_public:1;

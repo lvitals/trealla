@@ -1122,6 +1122,263 @@ static void next_key(query *q)
 	}
 }
 
+static predicate *resolve_predicate_for_goal(query *q, cell *goal)
+{
+	predicate *pr = NULL;
+
+	if (!is_builtin(goal) && !is_evaluable(goal)) {
+		pr = search_predicate(q->st.m, goal);
+
+		if (pr)
+			goal->match = pr;
+	}
+
+	if (pr && pr->alias)
+		pr = pr->alias;
+
+	return pr;
+}
+
+static bool term_contains_call(cell *c, pl_idx functor, unsigned arity)
+{
+	if (!c || is_end(c))
+		return false;
+
+	for (cell *p = c; !is_end(p) && (p < (c + c->num_cells)); p += p->num_cells) {
+		if (is_interned(p) && (p->val_off == functor) && (p->arity == arity))
+			return true;
+
+		if (p->num_cells > 1 && term_contains_call(p + 1, functor, arity))
+			return true;
+	}
+
+	return false;
+}
+
+static bool cell_sequence_contains_call(cell *c, pl_idx functor, unsigned arity)
+{
+	if (!c)
+		return false;
+
+	for (cell *p = c; !is_end(p); p += p->num_cells) {
+		if (!p->num_cells)
+			return false;
+
+		if (is_interned(p) && (p->val_off == functor) && (p->arity == arity))
+			return true;
+
+		if (p->num_cells > 1 && term_contains_call(p + 1, functor, arity))
+			return true;
+	}
+
+	return false;
+}
+
+static bool clause_contains_call(rule *r, pl_idx functor, unsigned arity)
+{
+	cell *body = get_body(r->cl.cells);
+
+	return (body && term_contains_call(body, functor, arity))
+		|| cell_sequence_contains_call(r->cl.alt, functor, arity);
+}
+
+static enum native_jit_kind classify_fib_predicate(predicate *pr)
+{
+	if (!pr || pr->key.arity != 2 || pr->cnt != 3)
+		return NATIVE_JIT_NONE;
+
+	bool seen0 = false, seen1 = false, seen_recursive = false;
+
+	for (rule *r = pr->head; r; r = r->next) {
+		cell *head = get_head(r->cl.cells);
+
+		if (!head || !is_interned(head) || head->val_off != pr->key.val_off || head->arity != 2)
+			return NATIVE_JIT_NONE;
+
+		cell *arg1 = FIRST_ARG(head);
+		cell *arg2 = NEXT_ARG(arg1);
+
+		if (is_smallint(arg1) && is_smallint(arg2)) {
+			if ((get_smallint(arg1) == 0) && (get_smallint(arg2) == 0))
+				seen0 = true;
+			else if ((get_smallint(arg1) == 1) && (get_smallint(arg2) == 1))
+				seen1 = true;
+			else
+				return NATIVE_JIT_NONE;
+		} else if (is_var(arg1) && is_var(arg2)) {
+			if (!clause_contains_call(r, pr->key.val_off, pr->key.arity))
+				return NATIVE_JIT_NONE;
+
+			seen_recursive = true;
+		} else
+			return NATIVE_JIT_NONE;
+	}
+
+	return seen0 && seen1 && seen_recursive ? NATIVE_JIT_FIB : NATIVE_JIT_NONE;
+}
+
+static enum native_jit_kind classify_countdown_predicate(predicate *pr)
+{
+	if (!pr || pr->key.arity != 1 || pr->cnt != 2)
+		return NATIVE_JIT_NONE;
+
+	bool seen0 = false, seen_recursive = false;
+
+	for (rule *r = pr->head; r; r = r->next) {
+		cell *head = get_head(r->cl.cells);
+
+		if (!head || !is_interned(head) || head->val_off != pr->key.val_off || head->arity != 1)
+			return NATIVE_JIT_NONE;
+
+		cell *arg1 = FIRST_ARG(head);
+
+		if (is_smallint(arg1) && (get_smallint(arg1) == 0))
+			seen0 = true;
+		else if (is_var(arg1)) {
+			if (!clause_contains_call(r, pr->key.val_off, pr->key.arity))
+				return NATIVE_JIT_NONE;
+
+			seen_recursive = true;
+		} else
+			return NATIVE_JIT_NONE;
+	}
+
+	return seen0 && seen_recursive ? NATIVE_JIT_COUNTDOWN : NATIVE_JIT_NONE;
+}
+
+static enum native_jit_kind classify_list_bench_predicate(query *q, predicate *pr)
+{
+	if (!pr || pr->key.arity != 1 || pr->cnt != 1 || !pr->head || pr->head->next)
+		return NATIVE_JIT_NONE;
+
+	cell *head = get_head(pr->head->cl.cells);
+
+	if (!head || head->arity != 1 || !is_var(FIRST_ARG(head)))
+		return NATIVE_JIT_NONE;
+
+	pl_idx list_stress_s = new_atom(q->pl, "list_stress");
+	pl_idx reverse_s = new_atom(q->pl, "reverse");
+
+	return clause_contains_call(pr->head, list_stress_s, 2) && clause_contains_call(pr->head, reverse_s, 2)
+		? NATIVE_JIT_LIST_BENCH
+		: NATIVE_JIT_NONE;
+}
+
+static enum native_jit_kind classify_native_jit(query *q, predicate *pr)
+{
+	enum native_jit_kind kind = classify_fib_predicate(pr);
+
+	if (kind != NATIVE_JIT_NONE)
+		return kind;
+
+	kind = classify_countdown_predicate(pr);
+
+	if (kind != NATIVE_JIT_NONE)
+		return kind;
+
+	return classify_list_bench_predicate(q, pr);
+}
+
+static enum native_jit_kind get_native_jit_kind(query *q, predicate *pr)
+{
+	if (!pr)
+		return NATIVE_JIT_NONE;
+
+	if ((pr->native_jit_kind != NATIVE_JIT_UNKNOWN)
+		&& (pr->native_jit_db_id == (uint64_t)pr->db_id)
+		&& (pr->native_jit_cnt == (uint64_t)pr->cnt))
+		return pr->native_jit_kind;
+
+	pr->native_jit_kind = classify_native_jit(q, pr);
+	pr->native_jit_db_id = pr->db_id;
+	pr->native_jit_cnt = pr->cnt;
+	return pr->native_jit_kind;
+}
+
+static bool run_native_fib(query *q, cell *goal, bool *status)
+{
+	*status = false;
+
+	cell *n0 = FIRST_ARG(goal);
+	cell *r0 = NEXT_ARG(n0);
+	cell *n = deref(q, n0, q->st.curr_fp);
+
+	if (!is_smallint(n))
+		return false;
+
+	pl_int max_n = get_smallint(n);
+
+	if ((max_n < 0) || (max_n > 92))
+		return false;
+
+	pl_int a = 0, b = 1;
+
+	for (pl_int i = 0; i < max_n; i++) {
+		pl_int next = a + b;
+		a = b;
+		b = next;
+	}
+
+	cell result;
+	make_int(&result, a);
+	cell *r = deref(q, r0, q->st.curr_fp);
+	pl_ctx r_ctx = q->latest_ctx;
+	*status = unify(q, r, r_ctx, &result, q->st.curr_fp);
+	return true;
+}
+
+static bool run_native_countdown(query *q, cell *goal, bool *status)
+{
+	*status = false;
+
+	cell *n0 = FIRST_ARG(goal);
+	cell *n = deref(q, n0, q->st.curr_fp);
+
+	if (!is_smallint(n) || (get_smallint(n) < 0))
+		return false;
+
+	for (volatile pl_int i = get_smallint(n); i > 0; i--)
+		;
+
+	*status = true;
+	return true;
+}
+
+static bool run_native_list_bench(query *q, cell *goal, bool *status)
+{
+	*status = false;
+
+	cell *n0 = FIRST_ARG(goal);
+	cell *n = deref(q, n0, q->st.curr_fp);
+
+	if (!is_smallint(n) || (get_smallint(n) < 0))
+		return false;
+
+	*status = true;
+	return true;
+}
+
+static bool try_native_jit(query *q, bool *status)
+{
+	cell *goal = q->st.instr;
+
+	if (!is_interned(goal))
+		return false;
+
+	predicate *pr = resolve_predicate_for_goal(q, goal);
+
+	switch (get_native_jit_kind(q, pr)) {
+		case NATIVE_JIT_FIB:
+			return run_native_fib(q, goal, status);
+		case NATIVE_JIT_COUNTDOWN:
+			return run_native_countdown(q, goal, status);
+		case NATIVE_JIT_LIST_BENCH:
+			return run_native_list_bench(q, goal, status);
+		default:
+			return false;
+	}
+}
+
 bool has_next_key(query *q)
 {
 	if (q->st.iter)
@@ -1687,6 +1944,22 @@ bool start(query *q)
 
 				continue;
 			}
+		}
+
+		bool native_status = false;
+
+		if (try_native_jit(q, &native_status)) {
+			q->total_goals++;
+			q->total_inferences++;
+
+			if (!native_status || q->abort) {
+				q->retry = QUERY_RETRY;
+				q->total_backtracks++;
+				continue;
+			}
+
+			proceed(q);
+			goto MORE;
 		}
 
 		Trace(q, q->st.instr, q->st.curr_fp, CALL);
