@@ -20,7 +20,7 @@ echo "===================================================="
 
 # 1. Compilation
 echo "[1/4] Compiling Trealla with Lua support..."
-(cd "$ROOT_DIR" && make LUA=1 -j$(nproc))
+(cd "$ROOT_DIR" && make clean && make LUA=system)
 echo "Compilation successful."
 echo
 

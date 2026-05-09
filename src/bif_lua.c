@@ -624,3 +624,13 @@ builtins g_lua_bifs[] = {
 #else
 builtins g_lua_bifs[] = { { 0 } };
 #endif
+
+#ifndef USE_LUA
+void init_lua_vm(prolog *pl) { (void)pl; }
+lua_State *get_lua_vm(query *q) { (void)q; return NULL; }
+void prolog_to_lua(lua_State *L, query *q, cell *c, pl_ctx c_ctx) { (void)L; (void)q; (void)c; (void)c_ctx; }
+cell *lua_to_prolog(lua_State *L, int index, query *q) { (void)L; (void)index; (void)q; return NULL; }
+bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) { (void)q; (void)c; (void)c_ctx; return false; }
+void lua_vm_lock() {}
+void lua_vm_unlock() {}
+#endif

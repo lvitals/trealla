@@ -5,6 +5,9 @@
 
 #ifdef USE_LUA
 #include <lua.h>
+#else
+typedef struct lua_State lua_State;
+#endif
 
 // Helpers for engine integration
 void init_lua_vm(prolog *pl);
@@ -33,11 +36,5 @@ bool bif_lua_intersection_3(query *q);
 bool bif_lua_powerset_2(query *q);
 
 extern builtins g_lua_bifs[];
-
-#else
-// Fallback when Lua is not enabled
-static inline void init_lua_vm(prolog *pl) { (void)pl; }
-static inline bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) { (void)q; (void)c; (void)c_ctx; return false; }
-#endif
 
 #endif
