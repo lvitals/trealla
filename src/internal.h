@@ -327,6 +327,8 @@ typedef struct choice_ choice;
 typedef struct run_state_ run_state;
 typedef struct prolog_flags_ prolog_flags;
 typedef struct builtins_ builtins;
+typedef struct hash_table hash_table;
+typedef struct hash_iter hash_iter;
 
 // Using a fixed-size cell allows having arrays of cells, which is
 // basically what a Term is. A compound is a variable length array of
@@ -566,7 +568,7 @@ enum { eof_action_eof_code, eof_action_error, eof_action_reset };
 struct stream_ {
 	union {
 		FILE *fp;
-		skiplist *keyval;
+		hash_table *keyval;
 		query *engine;
 		void *handle;
 	};
@@ -870,15 +872,17 @@ typedef struct {
 	bool is_anon;
 } var_item;
 
-#if USE_LUA
 #include "kpoll.h"
+#include "hash_table.h"
+#if USE_LUA
 #include <lua.h>
 #endif
 
 struct prolog_ {
-#if USE_LUA
 	struct kpoll kpoll_ctx;
+#if USE_LUA
 	lua_State *lua_vms[MAX_THREADS];
+#endif
 	skiplist *fds;
 	query **timer_heap;
 	pl_idx timer_heap_size, timer_heap_cap;
@@ -886,6 +890,7 @@ struct prolog_ {
        list run_queue;
        lock run_queue_lock;
        pthread_cond_t run_queue_cond;
+#if USE_THREADS
        pthread_t worker_threads[MAX_THREADS];
        unsigned worker_count;
        unsigned last_worker_id;
@@ -898,7 +903,8 @@ struct prolog_ {
 	module *system_m, *user_m, *m, *dcgs;
 	var_item *tabs;
 	parser *p;
-	skiplist *biftab, *keyval, *help, *fortab;
+	skiplist *biftab, *help, *fortab;
+	hash_table *keyval;
 	FILE *logfp;
 	lock guard;
 	size_t tabs_size;
@@ -955,6 +961,8 @@ inline static void share_cell_(const cell *c)
 
 #define unshare_cell(c) if (is_managed(c)) unshare_cell_(c)
 
+void bb_erase(module *m, const char *ref);
+
 inline static void unshare_cell_(cell *c)
 {
 	if (is_strbuf(c)) {
@@ -994,7 +1002,7 @@ inline static void unshare_cell_(cell *c)
 		if (--c->val_blob->refcnt == 0) {
 			module *m = (module*)c->val_blob->ptr;
 			const char *ref = (char*)c->val_blob->ptr2;
-			sl_del(m->pl->keyval, ref);
+			bb_erase(m, ref);
 			free(c->val_blob->ptr2);
 			free(c->val_blob);
 			c->tag = TAG_EMPTY;

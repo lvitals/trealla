@@ -49,7 +49,8 @@ static bool bif_bb_b_put_2(query *q)
 
 	if (DO_DUMP) DUMP_TERM2("bb_b_put", tmpbuf, p2, p2_ctx, 1);
 
-	char *key = strdup(tmpbuf);
+	cell key;
+	make_atom(&key, new_atom(q->pl, tmpbuf));
 	CHECKED(init_tmp_heap(q));
 	cell *tmp = copy_term_to_tmp(q, p2, p2_ctx, false);
 	CHECKED(tmp);
@@ -65,14 +66,18 @@ static bool bif_bb_b_put_2(query *q)
 	make_ref(&c, var_num, q->st.curr_fp);
 	blob *b = calloc(1, sizeof(blob));
 	b->ptr = (void*)m;
-	b->ptr2 = (void*)strdup(key);
+	b->ptr2 = (void*)strdup(tmpbuf);
 	make_kvref(&v, b);
 
 	if (!unify(q, &c, q->st.curr_fp, &v, q->st.curr_fp))
 		return false;
 
+	cell val_ptr_cell;
+	val_ptr_cell.tag = TAG_EMPTY;
+	val_ptr_cell.val_ptr = val;
+
 	prolog_lock(q->pl);
-	sl_set(q->pl->keyval, key, val);
+	hash_set(q->pl->keyval, q->pl, &key, &val_ptr_cell);
 	prolog_unlock(q->pl);
 
 	return true;
@@ -109,7 +114,8 @@ static bool bif_bb_put_2(query *q)
 	else
 		snprintf(tmpbuf1, sizeof(tmpbuf1), "%s:%d:b", m->name, (int)get_smallint(p1));
 
-	const char *key1 = tmpbuf1;
+	cell key1;
+	make_atom(&key1, new_atom(q->pl, tmpbuf1));
 
 	if (is_atom(p1))
 		snprintf(tmpbuf2, sizeof(tmpbuf2), "%s:%s", m->name, C_STR(q, p1));
@@ -118,7 +124,8 @@ static bool bif_bb_put_2(query *q)
 
 	if (DO_DUMP) DUMP_TERM2("bb_put", tmpbuf2, p2, p2_ctx, 1);
 
-	char *key2 = strdup(tmpbuf2);
+	cell key2;
+	make_atom(&key2, new_atom(q->pl, tmpbuf2));
 	CHECKED(init_tmp_heap(q));
 	cell *tmp = copy_term_to_tmp(q, p2, p2_ctx, false);
 	CHECKED(tmp);
@@ -127,15 +134,14 @@ static bool bif_bb_put_2(query *q)
 	CHECKED(val);
 	dup_cells(val, tmp, tmp->num_cells);
 
+	cell val_ptr_cell;
+	val_ptr_cell.tag = TAG_EMPTY;
+	val_ptr_cell.val_ptr = val;
+
 	prolog_lock(q->pl);
-
-	while (sl_del(q->pl->keyval, key1))
-		;
-
-	while (sl_del(q->pl->keyval, key2))
-		;
-
-	sl_app(q->pl->keyval, key2, val);
+	hash_del(q->pl->keyval, q->pl, &key1);
+	hash_del(q->pl->keyval, q->pl, &key2);
+	hash_set(q->pl->keyval, q->pl, &key2, &val_ptr_cell);
 	prolog_unlock(q->pl);
 
 	return true;
@@ -171,20 +177,21 @@ static bool bif_bb_get_2(query *q)
 	else
 		snprintf(tmpbuf, sizeof(tmpbuf), "%s:%d:b", m->name, (int)get_smallint(p1));
 
-	const char *key = tmpbuf;
-	const void *val;
+	cell key;
+	make_atom(&key, new_atom(q->pl, tmpbuf));
+	cell val_cell;
 
 	prolog_lock(q->pl);
 
-	if (!sl_get(q->pl->keyval, key, &val)) {
+	if (!hash_get(q->pl->keyval, q->pl, &key, &val_cell)) {
 		if (is_atom(p1))
 			snprintf(tmpbuf, sizeof(tmpbuf), "%s:%s", m->name, C_STR(q, p1));
 		else
 			snprintf(tmpbuf, sizeof(tmpbuf), "%s:%d", m->name, (int)get_smallint(p1));
 
-		key = tmpbuf;
+		make_atom(&key, new_atom(q->pl, tmpbuf));
 
-		if (!sl_get(q->pl->keyval, key, &val)) {
+		if (!hash_get(q->pl->keyval, q->pl, &key, &val_cell)) {
 			prolog_unlock(q->pl);
 			return false;
 		}
@@ -194,7 +201,7 @@ static bool bif_bb_get_2(query *q)
 
 	CHECKED(check_frame(q, MAX_ARITY));
 	try_me(q, MAX_ARITY);
-	cell *tmp = copy_term_to_heap(q, (cell*)val, q->st.fp, false);
+	cell *tmp = copy_term_to_heap(q, (cell*)val_cell.val_ptr, q->st.fp, false);
 	CHECKED(tmp);
 	GET_FIRST_ARG(p1x,nonvar);
 	GET_NEXT_ARG(p2,any);
@@ -243,19 +250,20 @@ static bool bif_bb_delete_2(query *q)
 	else
 		snprintf(tmpbuf, sizeof(tmpbuf), "%s:%d", m->name, (int)get_smallint(p1));
 
-	const char *key = tmpbuf;
-	const void *val;
+	cell key;
+	make_atom(&key, new_atom(q->pl, tmpbuf));
+	cell val_cell;
 
 	prolog_lock(q->pl);
 
-	if (!sl_get(q->pl->keyval, key, &val)) {
+	if (!hash_get(q->pl->keyval, q->pl, &key, &val_cell)) {
 		prolog_unlock(q->pl);
 		return false;
 	}
 
 	CHECKED(check_frame(q, MAX_ARITY), prolog_unlock(q->pl));
 	try_me(q, MAX_ARITY);
-	cell *tmp = copy_term_to_heap(q, (cell*)val, q->st.fp, false);
+	cell *tmp = copy_term_to_heap(q, (cell*)val_cell.val_ptr, q->st.fp, false);
 	CHECKED(tmp, prolog_unlock(q->pl));
 	GET_FIRST_ARG(p1x,nonvar);
 	GET_NEXT_ARG(p2,any);
@@ -268,7 +276,7 @@ static bool bif_bb_delete_2(query *q)
 		const frame *f2 = GET_FRAME(p2_ctx);
 		slot *e2 = get_slot(q, f2, p2->var_num);
 		*e2 = *e;
-		bool ok = sl_del(q->pl->keyval, key);
+		bool ok = hash_del(q->pl->keyval, q->pl, &key);
 		prolog_unlock(q->pl);
 		return ok;
 	}
@@ -278,13 +286,7 @@ static bool bif_bb_delete_2(query *q)
 		return false;
 	}
 
-	bool ok = sl_del(q->pl->keyval, key);
-
-	if (ok) {
-		while (sl_del(q->pl->keyval, key))
-			;
-	}
-
+	bool ok = hash_del(q->pl->keyval, q->pl, &key);
 	prolog_unlock(q->pl);
 	return ok;
 }
@@ -319,12 +321,13 @@ static bool bif_bb_update_3(query *q)
 	else
 		snprintf(tmpbuf, sizeof(tmpbuf), "%s:%d", m->name, (int)get_smallint(p1));
 
-	char *key = tmpbuf;
-	const void *val;
+	cell key;
+	make_atom(&key, new_atom(q->pl, tmpbuf));
+	cell val_cell;
 
 	prolog_lock(q->pl);
 
-	if (!sl_get(q->pl->keyval, key, &val)) {
+	if (!hash_get(q->pl->keyval, q->pl, &key, &val_cell)) {
 		prolog_unlock(q->pl);
 		return false;
 	}
@@ -332,7 +335,7 @@ static bool bif_bb_update_3(query *q)
 	CHECKED(check_frame(q, MAX_ARITY), prolog_unlock(q->pl));
 	try_me(q, MAX_ARITY);
 	q->noderef = true;
-	cell *tmp = copy_term_to_heap(q, (cell*)val, q->st.fp, false);
+	cell *tmp = copy_term_to_heap(q, (cell*)val_cell.val_ptr, q->st.fp, false);
 	q->noderef = false;
 	CHECKED(tmp, prolog_unlock(q->pl));
 	GET_FIRST_ARG(p1x,nonvar);
@@ -346,21 +349,30 @@ static bool bif_bb_update_3(query *q)
 		return false;
 	}
 
-	key = strdup(tmpbuf);
 	tmp = copy_term_to_heap(q, p3, p3_ctx, false);
 	CHECKED(tmp, prolog_unlock(q->pl));
 	cell *value = malloc(sizeof(cell)*tmp->num_cells);
 	CHECKED(value, prolog_unlock(q->pl));
 	dup_cells(value, tmp, tmp->num_cells);
 
-	while (sl_del(q->pl->keyval, key))
-		;
+	cell val_ptr_cell;
+	val_ptr_cell.tag = TAG_EMPTY;
+	val_ptr_cell.val_ptr = value;
 
-	sl_app(q->pl->keyval, key, value);
+	hash_set(q->pl->keyval, q->pl, &key, &val_ptr_cell);
 
 	prolog_unlock(q->pl);
 
 	return true;
+}
+
+void bb_erase(module *m, const char *ref)
+{
+	cell key;
+	make_atom(&key, new_atom(m->pl, ref));
+	prolog_lock(m->pl);
+	hash_del(m->pl->keyval, m->pl, &key);
+	prolog_unlock(m->pl);
 }
 
 builtins g_bboard_bifs[] =

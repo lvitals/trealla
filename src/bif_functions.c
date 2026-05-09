@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "module.h"
+#include "gc.h"
 #include "prolog.h"
 #include "query.h"
 #ifdef USE_LUA
@@ -68,7 +69,7 @@ bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) {
 	if (errno == ENOMEM)										\
 		return throw_error(q, &p1, q->st.curr_fp, "resource_error", "memory"); \
 	q->accum.tag = TAG_INT;										\
-	q->accum.val_bigint = malloc(sizeof(bigint));				\
+	q->accum.val_bigint = malloc(sizeof(bigint)); gc_register_object(q->pl, q->accum.val_bigint, TAG_INT);				\
 	if (errno == ENOMEM)										\
 		return throw_error(q, &p1, q->st.curr_fp, "resource_error", "memory"); \
 	if (mp_int_init_copy(&q->accum.val_bigint->ival, &q->tmp_ival) == MP_MEMORY) {\
@@ -84,7 +85,7 @@ bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) {
 	if (errno == ENOMEM)										\
 		return throw_error(q, p1, q->st.curr_fp, "resource_error", "memory"); \
 	q->accum.tag = TAG_INT;										\
-	q->accum.val_bigint = malloc(sizeof(bigint));				\
+	q->accum.val_bigint = malloc(sizeof(bigint)); gc_register_object(q->pl, q->accum.val_bigint, TAG_INT);				\
 	if (errno == ENOMEM)										\
 		return throw_error(q, p1, q->st.curr_fp, "resource_error", "memory"); \
 	if (mp_int_init_copy(&q->accum.val_bigint->ival, &q->tmp_ival) == MP_MEMORY) {\
@@ -101,7 +102,7 @@ bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) {
 		return throw_error(q, &p1, q->st.curr_fp, "resource_error", "memory"); \
 	if (mp_int_compare_value(&q->tmp_irat.den, 1)) { \
 		q->accum.tag = TAG_RATIONAL;										\
-		q->accum.val_bigint = malloc(sizeof(bigint));				\
+		q->accum.val_bigint = malloc(sizeof(bigint)); gc_register_object(q->pl, q->accum.val_bigint, TAG_INT);				\
 		if (errno == ENOMEM)										\
 			return throw_error(q, &p1, q->st.curr_fp, "resource_error", "memory"); \
 		if (mp_rat_init_copy(&q->accum.val_bigint->irat, &q->tmp_irat) == MP_MEMORY) {\
@@ -111,7 +112,7 @@ bool call_lua_function(query *q, cell *c, pl_ctx c_ctx) {
 		q->accum.val_bigint->refcnt = 0;							\
 	} else { \
 		q->accum.tag = TAG_INT;										\
-		q->accum.val_bigint = malloc(sizeof(bigint));				\
+		q->accum.val_bigint = malloc(sizeof(bigint)); gc_register_object(q->pl, q->accum.val_bigint, TAG_INT);				\
 		if (errno == ENOMEM)										\
 			return throw_error(q, &p1, q->st.curr_fp, "resource_error", "memory"); \
 		if (mp_int_init_copy(&q->accum.val_bigint->ival, &q->tmp_irat.num) == MP_MEMORY) {\
@@ -567,7 +568,7 @@ static bool bif_numerator_1(query *q)
 	}
 
 	q->accum.tag = TAG_INT;
-	q->accum.val_bigint = malloc(sizeof(bigint));
+	q->accum.val_bigint = malloc(sizeof(bigint)); gc_register_object(q->pl, q->accum.val_bigint, TAG_INT);
 	if (errno == ENOMEM)
 		return throw_error(q, &p1, q->st.curr_fp, "resource_error", "memory");
 	mp_int_init_copy(&q->accum.val_bigint->ival, &p1.val_bigint->irat.num);
@@ -595,7 +596,7 @@ static bool bif_denominator_1(query *q)
 	}
 
 	q->accum.tag = TAG_INT;
-	q->accum.val_bigint = malloc(sizeof(bigint));
+	q->accum.val_bigint = malloc(sizeof(bigint)); gc_register_object(q->pl, q->accum.val_bigint, TAG_INT);
 	if (errno == ENOMEM)
 		return throw_error(q, &p1, q->st.curr_fp, "resource_error", "memory");
 	mp_int_init_copy(&q->accum.val_bigint->ival, &p1.val_bigint->irat.den);

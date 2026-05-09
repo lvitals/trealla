@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
@@ -33,10 +34,8 @@ bool do_yield(query *q, int msecs)
 	q->tmo_msecs = get_time_in_usec() / 1000;
 	q->tmo_msecs += msecs > 0 ? msecs : 1;
 
-	#if USE_LUA
 	if (q->is_task)
 		timer_heap_push(q->pl, q);
-	#endif
 
 	CHECKED(push_choice(q));
 	return false;
@@ -155,7 +154,6 @@ static bool bif_wait_0(query *q)
 		uint64_t now = get_time_in_usec() / 1000;
 		uint64_t min_tmo = 0;
 
-		#if USE_LUA
 		while (true) {
 			query *task = timer_heap_pop(q->pl);
 			if (!task) break;
@@ -184,7 +182,6 @@ static bool bif_wait_0(query *q)
 			pthread_cond_signal(&q->pl->run_queue_cond);
 			release_lock(&q->pl->run_queue_lock);
 		}
-		#endif
 
 		acquire_lock(&q->tasks_lock);
 		query *task = q->tasks;
@@ -201,19 +198,10 @@ static bool bif_wait_0(query *q)
 			}
 
 			if (task->tmo_msecs && !task->error) {
-#if USE_LUA
 				task = next;
 				continue;
-#else
-				if (now <= task->tmo_msecs) {
-					task = next;
-					continue;
-				}
-				task->tmo_msecs = 0;
-#endif
 			}
 
-#if USE_LUA
 			if (task->wait_fd != -1 && !task->error) {
 				struct kpollfd *kfd = NULL;
 				prolog_lock(q->pl);
@@ -225,20 +213,16 @@ static bool bif_wait_0(query *q)
 				}
 			}
 			is_ready = true;
-#endif
 
 			if (!task->yielded || !task->st.instr || task->error) {
 				detach_task_locked(q, task);
 				
-				#if USE_LUA
 				timer_heap_delete(q->pl, task);
-				#endif
 				query_destroy(task);
 				task = next;
 				continue;
 			}
 
-#if USE_LUA
 			if (is_ready) {
 				detach_task_locked(q, task);
 				if (!ready_head) ready_head = task;
@@ -246,14 +230,10 @@ static bool bif_wait_0(query *q)
 				ready_tail = task;
 				q->inflight++;
 			}
-#else
-			start(task);
-#endif
 			task = next;
 		}
 		release_lock(&q->tasks_lock);
 
-#if USE_LUA
 		if (ready_head) {
 			acquire_lock(&q->pl->run_queue_lock);
 			while (ready_head) {
@@ -272,11 +252,6 @@ static bool bif_wait_0(query *q)
 			}
 			kpoll_wait(&q->pl->kpoll_ctx, timeout);
 		}
-#else
-		{
-			msleep(1);
-		}
-#endif
 	}
 
 	q->end_wait = false;
@@ -299,11 +274,7 @@ static bool bif_await_0(query *q)
 			if (task->spawned) {
 				spawn_cnt++;
 
-				#if USE_LUA
 				if (spawn_cnt >= (g_cpu_count * 1024))
-#else
-				if (spawn_cnt >= g_cpu_count)
-#endif
 					break;
 			}
 
@@ -318,7 +289,6 @@ static bool bif_await_0(query *q)
 				task->tmo_msecs = 0;
 			}
 
-#if USE_LUA
 			if (task->wait_fd != -1 && !task->error) {
 				struct kpollfd *kfd = NULL;
 				if (sl_get(q->pl->fds, (void*)(ptrdiff_t)task->wait_fd, (const void**)&kfd)) {
@@ -328,7 +298,6 @@ static bool bif_await_0(query *q)
 					}
 				}
 			}
-#endif
 
 			if (!task->yielded || !task->st.instr || task->error) {
 				query *save = task;
@@ -346,13 +315,9 @@ static bool bif_await_0(query *q)
 		}
 
 		if (!did_something) {
-#if USE_LUA
 			int timeout = min_tmo > 1000 ? 1000 : (int)min_tmo;
 			if (min_tmo == 0) timeout = 1000; // Default sleep if no timeouts
 			kpoll_wait(&q->pl->kpoll_ctx, timeout);
-#else
-			msleep(1);
-#endif
 		} else
 			break;
 	}
@@ -446,7 +411,6 @@ static bool bif_task_add_fd_2(query *q)
 	int fd = (int)get_smallint(p1);
 	short events = (short)get_smallint(p2);
 
-#if USE_LUA
 	struct kpollfd *kfd = NULL;
 	if (sl_get(q->pl->fds, (void*)(ptrdiff_t)fd, (const void**)&kfd)) {
 
@@ -458,9 +422,6 @@ static bool bif_task_add_fd_2(query *q)
 		sl_set(q->pl->fds, (void*)(ptrdiff_t)fd, kfd);
 	}
 	return true;
-#else
-	return false;
-#endif
 }
 
 static bool bif_task_del_fd_1(query *q)
@@ -468,7 +429,6 @@ static bool bif_task_del_fd_1(query *q)
 	GET_FIRST_ARG(p1,integer);
 	int fd = (int)get_smallint(p1);
 
-#if USE_LUA
 	struct kpollfd *kfd = NULL;
 	if (sl_get(q->pl->fds, (void*)(ptrdiff_t)fd, (const void**)&kfd)) {
 
@@ -476,9 +436,6 @@ static bool bif_task_del_fd_1(query *q)
 		sl_del(q->pl->fds, (void*)(ptrdiff_t)fd);
 	}
 	return true;
-#else
-	return false;
-#endif
 }
 
 static bool bif_task_wait_fd_3(query *q)
@@ -489,7 +446,6 @@ static bool bif_task_wait_fd_3(query *q)
 	int fd = (int)get_smallint(p1);
 	short events = (short)get_smallint(p2);
 
-#if USE_LUA
 	struct kpollfd *kfd = NULL;
 	if (!sl_get(q->pl->fds, (void*)(ptrdiff_t)fd, (const void**)&kfd)) {
 		kfd = calloc(1, sizeof(struct kpollfd));
@@ -508,9 +464,6 @@ static bool bif_task_wait_fd_3(query *q)
 	kpoll_ctl(&q->pl->kpoll_ctx, kfd, events);
 	q->wait_fd = fd;
 	return do_yield(q, 0);
-#else
-	return false;
-#endif
 }
 
 static bool bif_send_1(query *q)

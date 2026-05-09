@@ -2,8 +2,6 @@
 #include "internal.h"
 #include "query.h"
 
-#if USE_LUA
-
 void timer_heap_push(prolog *pl, query *q)
 {
 	acquire_lock(&pl->timer_heap_lock);
@@ -93,5 +91,3 @@ query *timer_heap_pop(prolog *pl)
 	release_lock(&pl->timer_heap_lock);
 	return root;
 }
-
-#endif

@@ -9,6 +9,11 @@
 #define DBL_DECIMAL_DIG DBL_DIG
 #endif
 
+static void map_free_val(const cell *key, const cell *val, void *param)
+{
+	unshare_cell((cell*)val);
+}
+
 static bool bif_map_create_2(query *q)
 {
 	GET_FIRST_ARG(p1,var);
@@ -64,7 +69,7 @@ static bool bif_map_create_2(query *q)
 			return throw_error(q, p4, p4_ctx, "instantiation_error", "args_not_sufficiently_instantiated");
 	}
 
-	str->keyval = sl_create((void*)fake_strcmp, (void*)fake_free, NULL);
+	str->keyval = hash_create(0, map_free_val, NULL);
 	CHECKED(str->keyval);
 	str->is_map = true;
 
@@ -91,37 +96,10 @@ static bool bif_map_set_3(query *q)
 
 	GET_NEXT_ARG(p1,atomic);
 	GET_NEXT_ARG(p2,atomic);
-	char *key;
 
-	if (is_integer(p1)) {
-		char tmpbuf[128];
-		snprintf(tmpbuf, sizeof(tmpbuf), "%lld", (long long unsigned)get_smallint(p1));
-		key = strdup(tmpbuf);
-	} else if (is_atom(p1))
-		key = DUP_STRING(q, p1);
-	else
-		return throw_error(q, p1, p1_ctx, "type_error", "integer");
-
-	CHECKED(key);
-	char *val = NULL;
-
-	if (is_integer(p2)) {
-		char tmpbuf[128];
-		snprintf(tmpbuf, sizeof(tmpbuf), "%lld", (long long unsigned)get_smallint(p2));
-		val = strdup(tmpbuf);
-	} else if (is_float(p2)) {
-		char tmpbuf[128];
-		snprintf(tmpbuf, sizeof(tmpbuf), "%.*lg", DBL_DECIMAL_DIG, get_float(p2));
-		val = strdup(tmpbuf);
-	} else if (is_atom(p2))
-		val = DUP_STRING(q, p2);
-	else {
-		free(key);
-		return throw_error(q, p2, p2_ctx, "type_error", "integer");
-	}
-
-	CHECKED(val);
-	sl_app(str->keyval, key, val);
+	cell val = *p2;
+	share_cell(&val);
+	hash_set(str->keyval, q->pl, p1, &val);
 	return true;
 }
 
@@ -135,57 +113,13 @@ static bool bif_map_get_3(query *q)
 		return throw_error(q, pstr, pstr_ctx, "type_error", "not_a_map");
 
 	GET_NEXT_ARG(p1,atomic);
-	GET_NEXT_ARG(p2,atomic_or_var);
-	char *key;
-	char tmpbuf[128];
-
-	if (is_integer(p1)) {
-		snprintf(tmpbuf, sizeof(tmpbuf), "%lld", (long long unsigned)get_smallint(p1));
-		key = tmpbuf;
-	} else if (is_atom(p1))
-		key = DUP_STRING(q, p1);
-	else
-		return throw_error(q, p2, p2_ctx, "type_error", "integer");
-
-	CHECKED(key);
-	char *val = NULL;
-
-	if (!sl_get(str->keyval, key, (void*)&val)) {
-		if (key != tmpbuf) free(key);
-		return false;
-	}
+	GET_NEXT_ARG(p2,any);
 
 	cell tmp;
-	const char *src = val;
-	int all_digs = 1, floaties = 0;
+	if (!hash_get(str->keyval, q->pl, p1, &tmp))
+		return false;
 
-	if (*src == '-')
-		src++;
-
-	while (*src) {
-		if ((*src == '.') || (*src == 'e') || (*src == 'E')
-			|| (*src == '+') || (*src == '-'))
-			floaties++;
-		else if (!isdigit(*src)) {
-			all_digs = 0;
-			break;
-		}
-
-		src++;
-	}
-
-	if (all_digs && !floaties) {
-		pl_int v = strtoll(val, NULL, 10);
-		make_int(&tmp, v);
-	} else if (all_digs && floaties) {
-		pl_flt v = strtod(val, NULL);
-		make_float(&tmp, v);
-	} else
-		make_cstring(&tmp, val);
-
-	if (key != tmpbuf) free(key);
 	bool ok = unify(q, p2, p2_ctx, &tmp, q->st.curr_fp);
-	unshare_cell(&tmp);
 	return ok;
 }
 
@@ -199,19 +133,7 @@ static bool bif_map_del_2(query *q)
 		return throw_error(q, pstr, pstr_ctx, "type_error", "not_a_map");
 
 	GET_NEXT_ARG(p1,atomic);
-	char *key;
-
-	if (is_integer(p1)) {
-		char tmpbuf[128];
-		snprintf(tmpbuf, sizeof(tmpbuf), "%lld", (long long unsigned)get_smallint(p1));
-		key = strdup(tmpbuf);
-	} else if (is_atom(p1))
-		key = DUP_STRING(q, p1);
-	else
-		return throw_error(q, p1, p1_ctx, "type_error", "integer");
-
-	CHECKED(key);
-	sl_del(str->keyval, key);
+	hash_del(str->keyval, q->pl, p1);
 	return true;
 }
 
@@ -225,69 +147,21 @@ static bool bif_map_list_2(query *q)
 		return throw_error(q, pstr, pstr_ctx, "type_error", "not_a_map");
 
 	GET_NEXT_ARG(p1,list_or_var);
-	sliter *iter = sl_first(str->keyval);
-	char *val = NULL;
+	hash_iter *iter = hash_first(str->keyval);
 	CHECKED(init_tmp_heap(q));
+	cell key, val;
 
-	while (sl_next(iter, (void**)&val)) {
-		void *key = sl_key(iter);
-		cell tmpk, tmpv;
-		const char *src = key;
-		int all_digs = 1;
-
-		while (*src) {
-			if (!isdigit(*src)) {
-				all_digs = 0;
-				break;
-			}
-
-			src++;
-		}
-
-		if (all_digs) {
-			pl_int v = strtoll(key, NULL, 10);
-			make_int(&tmpk, v);
-		} else
-			make_cstring(&tmpk, key);
-
-		src = val;
-		src = val;
-		all_digs = 1; int floaties = 0;
-
-		if (*src == '-')
-			src++;
-
-		while (*src) {
-			if ((*src == '.') || (*src == 'e') || (*src == 'E')
-				|| (*src == '+') || (*src == '-'))
-				floaties++;
-			else if (!isdigit(*src)) {
-				all_digs = 0;
-				break;
-			}
-
-			src++;
-		}
-
-		if (all_digs && !floaties) {
-			pl_int v = strtoll(val, NULL, 10);
-			make_int(&tmpv, v);
-		} else if (all_digs && floaties) {
-			pl_flt v = strtod(val, NULL);
-			make_float(&tmpv, v);
-		} else
-			make_cstring(&tmpv, val);
-
+	while (hash_next(iter, &key, &val)) {
 		cell tmp2[3];
 		make_instr(tmp2+0, g_colon_s, NULL, 2, 2);
-		tmp2[1] = tmpk;
-		tmp2[2] = tmpv;
+		tmp2[1] = key;
+		tmp2[2] = val;
 		SET_OP(tmp2, OP_YFX);
 		append_list(q, tmp2);
 	}
 
 	cell *tmp = end_list(q);
-	sl_done(iter);
+	hash_done(iter);
 	return unify(q, p1, p1_ctx, tmp, q->st.curr_fp);
 }
 
@@ -302,7 +176,7 @@ static bool bif_map_count_2(query *q)
 
 	GET_NEXT_ARG(p1,var);
 	cell tmp;
-	make_int(&tmp, sl_count(str->keyval));
+	make_int(&tmp, hash_count(str->keyval));
 	return unify(q, p1, p1_ctx, &tmp, q->st.curr_fp);
 }
 

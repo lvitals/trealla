@@ -131,6 +131,8 @@ SRCOBJECTS = tpl.o \
 	src/bif_threads.o \
 	src/compile.o \
 	src/heap.o \
+	src/hash_table.o \
+	src/gc.o \
 	src/history.o \
 	src/kpoll.o \
 	src/library.o \

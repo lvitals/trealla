@@ -8,6 +8,7 @@
 #include "base64.h"
 #include "module.h"
 #include "parser.h"
+#include "gc.h"
 #include "prolog.h"
 #include "query.h"
 
@@ -6243,8 +6244,15 @@ static void load_ops(query *q)
 	SB_free(pr);
 }
 
+static bool bif_gc_0(query *q)
+{
+	gc_collect(q->pl);
+	return true;
+}
+
 builtins g_iso_bifs[] =
 {
+	{"gc", 0, bif_gc_0, "", false, false, BLAH},
 	{":", 2, bif_iso_qualify_2, "+atom,:callable", true, false, BLAH},
 	{"=..", 2, bif_iso_univ_2, "+term,?list", true, false, BLAH},
 	{"=", 2, bif_iso_unify_2, "+term,+term", true, false, BLAH},

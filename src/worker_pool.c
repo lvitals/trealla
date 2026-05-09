@@ -2,7 +2,7 @@
 #include "internal.h"
 #include "query.h"
 
-#if USE_THREADS && USE_LUA
+#if USE_THREADS
 #ifdef __GLIBC__
 #include <malloc.h>
 #endif

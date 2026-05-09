@@ -12,6 +12,7 @@
 #include "parser.h"
 #include "prolog.h"
 #include "bif_lua.h"
+#include "gc.h"
 #include "query.h"
 
 #if !defined(_WIN32) && !defined(__wasi__) && !defined(__ANDROID__)
@@ -401,10 +402,12 @@ builtins *get_fn_ptr(void *fn)
 			return ptr;
 	}
 
+#if USE_LUA
 	for (builtins *ptr = g_lua_bifs; ptr->name; ptr++) {
 		if (ptr->fn == fn)
 			return ptr;
 	}
+#endif
 
 	for (builtins *ptr = g_posix_bifs; ptr->name; ptr++) {
 		if (ptr->fn == fn)
@@ -452,11 +455,13 @@ void load_builtins(prolog *pl)
 		sl_app(pl->help, ptr->name, ptr);
 	}
 
+#if USE_LUA
 	for (const builtins *ptr = g_lua_bifs; ptr->name; ptr++) {
 		sl_app(pl->biftab, ptr->name, ptr);
 		if (ptr->name[0] == '$') continue;
 		sl_app(pl->help, ptr->name, ptr);
 	}
+#endif
 
 	for (const builtins *ptr = g_format_bifs; ptr->name; ptr++) {
 		sl_app(pl->biftab, ptr->name, ptr);
@@ -644,18 +649,16 @@ static bool g_init(prolog *pl)
 	return error;
 }
 
-#if USE_LUA
 static void valfree(const void *key, const void *val, const void *p)
 {
 	free((void*)val);
 }
-#endif
 
 void pl_destroy(prolog *pl)
 {
 	if (!pl) return;
 
-#if USE_LUA && USE_THREADS
+#if USE_THREADS
 	destroy_worker_pool(pl);
 #endif
 
@@ -678,7 +681,7 @@ void pl_destroy(prolog *pl)
 		module_destroy(m);
 
 	sl_destroy(pl->fortab);
-	sl_destroy(pl->keyval);
+	hash_destroy(pl->keyval);
 	sl_destroy(pl->help);
 	free(pl->tabs);
 
@@ -693,7 +696,7 @@ void pl_destroy(prolog *pl)
 				if (str->is_alias)
 					;
 				else if (str->is_map)
-					sl_destroy(str->keyval);
+					hash_destroy(str->keyval);
 				else if (str->is_engine)
 					query_destroy(str->engine);
 				else if (str->fp && (i > 2))
@@ -716,11 +719,18 @@ void pl_destroy(prolog *pl)
 	for (unsigned i = 0; i < MAX_THREADS; i++) {
 		if (pl->lua_vms[i]) lua_close(pl->lua_vms[i]);
 	}
+#endif
 	kpoll_destroy(&pl->kpoll_ctx);
 	sl_destroy(pl->fds);
 	free(pl->timer_heap);
-#endif
 	free(pl);
+}
+
+static void bb_keyval_free(const cell *key, const cell *val, void *param)
+{
+	cell *c = (cell*)val->val_ptr;
+	unshare_cells(c, c->num_cells);
+	free(c);
 }
 
 prolog *pl_create()
@@ -756,7 +766,7 @@ prolog *pl_create()
 #endif
 	}
 
-	CHECK_SENTINEL(pl->keyval = sl_create((void*)fake_strcmp, (void*)keyval_free, NULL), NULL);
+	CHECK_SENTINEL(pl->keyval = hash_create(0, bb_keyval_free, NULL), NULL);
 
 	pl->streams[0].fp = stdin;
 	CHECK_SENTINEL(pl->streams[0].alias = sl_create((void*)fake_strcmp, (void*)keyfree, NULL), NULL);
@@ -882,13 +892,16 @@ prolog *pl_create()
 	pl->user_m->filename = save_filename;
 	pl->user_m->prebuilt = false;
 
-#if USE_LUA
+	gc_init(pl);
 	kpoll_init(&pl->kpoll_ctx);
 	init_lock(&pl->timer_heap_lock);
+#if USE_LUA
 	init_lua_vm(pl);
-	init_worker_pool(pl);
-	pl->fds = sl_create(NULL, (void*)valfree, NULL);
 #endif
+#if USE_THREADS
+	init_worker_pool(pl);
+#endif
+	pl->fds = sl_create(NULL, (void*)valfree, NULL);
 
 	return pl;
 }

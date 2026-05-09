@@ -1738,7 +1738,7 @@ bool stream_close(query *q, int n)
 
 	if (str->is_alias) {
 	} else if (str->is_map) {
-		sl_destroy(str->keyval);
+		hash_destroy(str->keyval);
 	} else if (str->is_engine) {
 		query_destroy(str->engine);
 	} else
