@@ -76,19 +76,6 @@ CFLAGS += -DUSE_OPENSSL=1
 LDFLAGS += -lssl -lcrypto
 endif
 
-LUA ?= 0
-
-# Lua support (Optional, enable with LUA=1)
-ifeq ($(LUA),1)
-LUA_VERSION ?= 5.4
-LUA_PKG := lua$(LUA_VERSION)
-ifeq ($(LUA_VERSION),jit)
-LUA_PKG := luajit
-endif
-CFLAGS += $(shell pkg-config --cflags $(LUA_PKG) 2>/dev/null || echo "") -DUSE_LUA=1
-LDFLAGS += $(shell pkg-config --libs $(LUA_PKG) 2>/dev/null || echo "-llua")
-endif
-
 ifndef NOTHREADS
 CFLAGS += -DUSE_THREADS=1 -pthread
 LDFLAGS += -pthread
@@ -119,7 +106,6 @@ SRCOBJECTS = tpl.o \
 	src/bif_ffi.o \
 	src/bif_format.o \
 	src/bif_functions.o \
-	src/bif_lua.o \
 	src/bif_maps.o \
 	src/bif_os.o \
 	src/bif_posix.o \
@@ -151,6 +137,27 @@ SRCOBJECTS = tpl.o \
 	src/utf8.o \
 	src/version.o \
 	src/worker_pool.o
+
+LUA ?= 0
+LUA_VERSION ?= 5.4
+
+# Lua support
+ifeq ($(LUA),1)
+# 1. Internal integrated version (Zero dependencies)
+CFLAGS += -Ilua -DUSE_LUA=1 -DLUA_USE_LINUX
+LUA_SRCS = lapi.c lcode.c lctype.c ldebug.c ldo.c ldump.c lfunc.c lgc.c linit.c llex.c lmem.c lobject.c lopcodes.c lparser.c lstate.c lstring.c ltable.c ltm.c lundump.c lvm.c lzio.c lauxlib.c lbaselib.c lcorolib.c ldblib.c liolib.c lmathlib.c loadlib.c loslib.c lstrlib.c ltablib.c lutf8lib.c
+SRCOBJECTS += src/bif_lua.o $(addprefix lua/,$(LUA_SRCS:.c=.o))
+LDFLAGS += -ldl
+else ifneq ($(LUA),0)
+# 2. External system version (LUA=system or LUA=jit)
+LUA_PKG := lua$(LUA_VERSION)
+ifeq ($(LUA),jit)
+LUA_PKG := luajit
+endif
+CFLAGS += $(shell pkg-config --cflags $(LUA_PKG) 2>/dev/null || echo "") -DUSE_LUA=1
+SRCOBJECTS += src/bif_lua.o
+LDFLAGS += $(shell pkg-config --libs $(LUA_PKG) 2>/dev/null || echo "-llua")
+endif
 
 LIBOBJECTS =
 
