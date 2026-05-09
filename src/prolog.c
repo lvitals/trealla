@@ -271,14 +271,6 @@ void fake_free(const void *key, const void *val, const void *p)
 	free((void*)val);
 }
 
-static void keyval_free(const void *key, const void *val, const void *p)
-{
-	free((void*)key);
-	cell *c = (cell*)val;
-	unshare_cells(c, c->num_cells);
-	free((void*)val);
-}
-
 builtins *get_help(prolog *pl, const char *name, unsigned arity, bool *found, bool *evaluable)
 {
 	sliter *iter = sl_find_key(pl->help, name);
